@@ -1,1 +1,5 @@
-WILL_BE_REPLACED_BY_SCRIPT
+$(python3 -c "
+import sys
+with open('/tmp/index_calib.html') as f:
+    sys.stdout.write(f.read())
+")
