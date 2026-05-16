@@ -1,0 +1,121 @@
+<!-- File System Access API Feature for Saving to Original Location
+     
+     This file documents the implementation of the File System Access API feature
+     that enables saving files back to their original location instead of downloading
+     with a new filename.
+     
+     USAGE:
+     1. When user opens a file, call openFileWithHandle()
+     2. Store the returned fileHandle in a global variable
+     3. When user saves, call saveToOriginalLocation(content)
+     4. The system will save to the original file if API is available,
+        otherwise it falls back to downloading
+     
+     BROWSER SUPPORT:
+     - Chrome/Edge 86+, Opera 72+: Full File System Access API support
+     - Safari, Firefox: Fallback to download mechanism
+-->
+
+<script>
+let fileHandle = null;
+
+/**
+ * Open file using File System Access API with fallback
+ * @returns {Promise<string>} File content
+ */
+async function openFileWithHandle() {
+  try {
+    if ('showOpenFilePicker' in window) {
+      const handles = await window.showOpenFilePicker({
+        types: [{
+          description: 'Supported Files',
+          accept: { 'text/plain': ['.txt', '.json', '.fbk'], 'image/*': ['.jpg', '.png'] }
+        }]
+      });
+      fileHandle = handles[0];
+      const file = await fileHandle.getFile();
+      console.log('Opened file:', file.name, '| Original location will be remembered');
+      return await file.text();
+    } else {
+      console.log('File System Access API not supported, falling back to standard input');
+      document.getElementById('standardFileInput').click();
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error('File open error:', err);
+    }
+  }
+}
+
+/**
+ * Save content to original file location or download as fallback
+ * @param {string} content - Content to save
+ * @param {string} filename - Fallback filename if saving to original fails
+ * @returns {Promise<boolean>} True if saved successfully
+ */
+async function saveToOriginalLocation(content, filename = 'feedback.txt') {
+  if (!fileHandle) {
+    console.log('No file handle available, downloading file instead');
+    downloadFile(content, filename);
+    return false;
+  }
+
+  try {
+    const writable = await fileHandle.createWritable();
+    await writable.write(content);
+    await writable.close();
+    console.log('✓ Successfully saved to original location!');
+    return true;
+  } catch (err) {
+    console.error('Save to original location failed:', err);
+    if (err.name === 'NotAllowedError') {
+      console.log('Permission denied, downloading file as fallback');
+      downloadFile(content, filename);
+    } else {
+      console.error('Save error:', err.message);
+    }
+    return false;
+  }
+}
+
+/**
+ * Download file as fallback when direct save is not possible
+ * @param {string} content - Content to download
+ * @param {string} filename - Download filename
+ */
+function downloadFile(content, filename = 'feedback.txt') {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Check if File System Access API is available
+ * @returns {boolean}
+ */
+function isFileSaveSupported() {
+  return 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+}
+</script>
+
+<!-- Integration Example -->
+<button id="openBtn" onclick="openFileWithHandle()">📂 Open File</button>
+<button id="saveBtn" onclick="saveToOriginalLocation(document.getElementById('content').value)">💾 Save to Original</button>
+
+<textarea id="content" placeholder="Edit your content here..."></textarea>
+
+<script>
+// Example: Show indicator if File System Access is available
+if (isFileSaveSupported()) {
+  document.getElementById('saveBtn').textContent += ' ✎';
+  document.getElementById('saveBtn').title = 'Save to original file location (File System Access API supported)';
+} else {
+  document.getElementById('saveBtn').title = 'Download file (File System Access API not supported in this browser)';
+}
+</script>
