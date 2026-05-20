@@ -3634,7 +3634,7 @@ async function exportAllPdf(){
 
         const jsPdfAlign=align==='center'?'center':align==='right'?'right':'left';
 
-        doc.setFontSize(size);
+        doc.setFontSize(size * 0.9);
         doc.setFont('Helvetica',bold?'bold':'normal');
 
         if(fontOutline){
@@ -3770,7 +3770,7 @@ async function exportAllPdf(){
           const oc2=parseColor(outlineColor||'#000000');
           doc.saveGraphicsState();
           doc.setFont('Helvetica','bold');
-          doc.setFontSize(fs);
+          doc.setFontSize(fs * 0.9);
           if(fontOutline){
             doc.setTextColor(oc2.r,oc2.g,oc2.b);
             const off=Math.max(1,Math.round(outW*0.5));
