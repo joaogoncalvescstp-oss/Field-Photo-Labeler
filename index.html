@@ -4653,53 +4653,49 @@ class CanvasSVGCtx {
   }
 }
 
-// Lazy-load jsPDF + svg2pdf.js — tries multiple CDN sources per library
+// Lazy-load jsPDF then svg2pdf.js SEQUENTIALLY — svg2pdf must load after jsPDF
+// because it patches jsPDF.prototype to add doc.svg(), not expose a standalone fn
 let _pdfLibsReady=false;
 async function _loadPDFLibs(){
   if(_pdfLibsReady)return;
   const tryLoad=urls=>new Promise((res,rej)=>{
     let i=0;
     const next=()=>{
-      if(i>=urls.length)return rej(new Error('Failed to load from all sources'));
+      if(i>=urls.length)return rej(new Error('Failed to load from all CDN sources'));
       const s=document.createElement('script');s.src=urls[i++];
       s.onload=res;s.onerror=next;
       document.head.appendChild(s);
     };
     next();
   });
-  const tasks=[];
-  if(!window.jspdf) tasks.push(tryLoad([
+  // Step 1: jsPDF first — svg2pdf needs to find it on window to patch it
+  if(!window.jspdf) await tryLoad([
     'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
     'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
     'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
-  ]));
-  if(!window.svg2pdf) tasks.push(tryLoad([
+  ]);
+  // Step 2: svg2pdf.js second — patches jsPDF.prototype to add doc.svg()
+  const testDoc=new window.jspdf.jsPDF();
+  if(typeof testDoc.svg!=='function') await tryLoad([
     'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js',
     'https://unpkg.com/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.1/dist/svg2pdf.umd.min.js'
-  ]));
-  await Promise.all(tasks);
+    'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.1/dist/svg2pdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.0/dist/svg2pdf.umd.min.js'
+  ]);
   _pdfLibsReady=true;
 }
 
-// Resolve the svg2pdf callable — v2.x UMD exports a named object, not a bare function
-function _getSvg2PdfFn(){
-  const s=window.svg2pdf;
-  if(typeof s==='function') return s;               // some builds expose it directly
-  if(s&&typeof s.svg2pdf==='function') return s.svg2pdf; // named export (most v2.x builds)
-  if(s&&typeof s.default==='function') return s.default; // default re-export
-  throw new Error('svg2pdf.js loaded but function not found on window.svg2pdf');
-}
-
 // Build a multi-page vector PDF from an array of photo objects.
-// Each slide: photo → raster JPEG background, annotations → SVG vectors via svg2pdf.
+// Each slide: all draw calls recorded into SVG, then doc.svg() converts to PDF vectors.
 async function _buildVectorPDF(slides){
   await _loadPDFLibs();
   const{jsPDF}=window.jspdf;
-  const svgToPDF=_getSvg2PdfFn();
   const first=slides[0];
   const fw=first.img.naturalWidth,fh=first.img.naturalHeight;
   const doc=new jsPDF({orientation:fw>=fh?'landscape':'portrait',unit:'px',format:[fw,fh],hotfixes:['px_scaling']});
+  if(typeof doc.svg!=='function'){
+    throw new Error('doc.svg() unavailable — svg2pdf did not patch jsPDF. Try reloading the page.');
+  }
   for(let i=0;i<slides.length;i++){
     const p=slides[i];
     const w=p.img.naturalWidth,h=p.img.naturalHeight;
@@ -4709,14 +4705,14 @@ async function _buildVectorPDF(slides){
     ctx.drawImage(p.img,0,0,w,h);   // photo background — raster in SVG <image>
     renderLabelsToCtx(ctx,p);        // text labels, strokes → SVG <text>/<path>
     renderOverlayToCtx(ctx,p);       // circle overlay → SVG <path>/<image>
-    // svg2pdf.js needs the element attached to the live document to compute layout
+    // doc.svg() needs the element in the live DOM for layout calculations
     const host=document.createElement('div');
     host.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none';
     document.body.appendChild(host);
     host.innerHTML=ctx.toSVG();
     const svgEl=host.querySelector('svg');
     try{
-      await svgToPDF(svgEl,doc,{x:0,y:0,width:w,height:h});
+      await doc.svg(svgEl,{x:0,y:0,width:w,height:h});
     }finally{
       document.body.removeChild(host);
     }
