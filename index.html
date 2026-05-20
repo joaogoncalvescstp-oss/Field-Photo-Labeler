@@ -4626,7 +4626,7 @@ class CanvasSVGCtx {
   drawImage(img,a,b,c,d,e,f,g,h){
     const[x,y,w,hh]=arguments.length>=9?[e,f,g,h]:arguments.length>=5?[a,b,c,d]:[a,b,img.naturalWidth||img.width,img.naturalHeight||img.height];
     const src=this._toDataURL(img);
-    if(src)this._els.push(`<image href="${src}" x="${x}" y="${y}" width="${w}" height="${hh}" preserveAspectRatio="none" ${this._ca()}/>`);
+    if(src)this._els.push(`<image href="${src}" xlink:href="${src}" x="${x}" y="${y}" width="${w}" height="${hh}" preserveAspectRatio="none" ${this._ca()}/>`);
   }
   _fs(){const m=this._s.font.match(/(\d+(?:\.\d+)?)(px|pt)/);return m?+m[1]:12;}
   _ff(){const m=this._s.font.match(/(?:px|pt|em|%)\s+(.+)$/);return m?m[1].trim():'sans-serif';}
@@ -4653,20 +4653,42 @@ class CanvasSVGCtx {
   }
 }
 
-// Lazy-load jsPDF + svg2pdf.js (both reliably on CDN, loaded once on first use)
+// Lazy-load jsPDF + svg2pdf.js — tries multiple CDN sources per library
 let _pdfLibsReady=false;
 async function _loadPDFLibs(){
   if(_pdfLibsReady)return;
-  const load=src=>new Promise((res,rej)=>{
-    const s=document.createElement('script');s.src=src;
-    s.onload=res;s.onerror=()=>rej(new Error('Failed to load '+src.split('/').pop()));
-    document.head.appendChild(s);
+  const tryLoad=urls=>new Promise((res,rej)=>{
+    let i=0;
+    const next=()=>{
+      if(i>=urls.length)return rej(new Error('Failed to load from all sources'));
+      const s=document.createElement('script');s.src=urls[i++];
+      s.onload=res;s.onerror=next;
+      document.head.appendChild(s);
+    };
+    next();
   });
   const tasks=[];
-  if(!window.jspdf)   tasks.push(load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'));
-  if(!window.svg2pdf) tasks.push(load('https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js'));
+  if(!window.jspdf) tasks.push(tryLoad([
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+  ]));
+  if(!window.svg2pdf) tasks.push(tryLoad([
+    'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js',
+    'https://unpkg.com/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.1/dist/svg2pdf.umd.min.js'
+  ]));
   await Promise.all(tasks);
   _pdfLibsReady=true;
+}
+
+// Resolve the svg2pdf callable — v2.x UMD exports a named object, not a bare function
+function _getSvg2PdfFn(){
+  const s=window.svg2pdf;
+  if(typeof s==='function') return s;               // some builds expose it directly
+  if(s&&typeof s.svg2pdf==='function') return s.svg2pdf; // named export (most v2.x builds)
+  if(s&&typeof s.default==='function') return s.default; // default re-export
+  throw new Error('svg2pdf.js loaded but function not found on window.svg2pdf');
 }
 
 // Build a multi-page vector PDF from an array of photo objects.
@@ -4674,7 +4696,7 @@ async function _loadPDFLibs(){
 async function _buildVectorPDF(slides){
   await _loadPDFLibs();
   const{jsPDF}=window.jspdf;
-  const svgToPDF=window.svg2pdf;
+  const svgToPDF=_getSvg2PdfFn();
   const first=slides[0];
   const fw=first.img.naturalWidth,fh=first.img.naturalHeight;
   const doc=new jsPDF({orientation:fw>=fh?'landscape':'portrait',unit:'px',format:[fw,fh],hotfixes:['px_scaling']});
@@ -4687,9 +4709,17 @@ async function _buildVectorPDF(slides){
     ctx.drawImage(p.img,0,0,w,h);   // photo background — raster in SVG <image>
     renderLabelsToCtx(ctx,p);        // text labels, strokes → SVG <text>/<path>
     renderOverlayToCtx(ctx,p);       // circle overlay → SVG <path>/<image>
-    // Convert SVG string → DOM element → vector PDF page via svg2pdf
-    const svgEl=new DOMParser().parseFromString(ctx.toSVG(),'image/svg+xml').documentElement;
-    await svgToPDF(svgEl,doc,{x:0,y:0,width:w,height:h});
+    // svg2pdf.js needs the element attached to the live document to compute layout
+    const host=document.createElement('div');
+    host.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none';
+    document.body.appendChild(host);
+    host.innerHTML=ctx.toSVG();
+    const svgEl=host.querySelector('svg');
+    try{
+      await svgToPDF(svgEl,doc,{x:0,y:0,width:w,height:h});
+    }finally{
+      document.body.removeChild(host);
+    }
   }
   return doc.output('blob');
 }
