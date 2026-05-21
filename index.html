@@ -3731,27 +3731,24 @@ async function exportAllPdf(){
           const p0s=isCircArrow?{x:p0.x+Math.cos(angle)*circRadius,y:p0.y+Math.sin(angle)*circRadius}:p0;
           const p1e=isCircArrow?{x:p1.x-Math.cos(angle)*circRadius,y:p1.y-Math.sin(angle)*circRadius}:p1;
 
-          // Setback endpoints so line stops at arrowhead base (not tip)
           const _dimIsArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
           const _dimAtEnd=s.arrow==='end'||s.arrow==='both';
           const _dimAtStart=s.arrow==='start'||s.arrow==='both';
-          function _sb(fx,fy,tx,ty,d){const l=Math.hypot(tx-fx,ty-fy);if(l<1)return{x:tx,y:ty};const sa=Math.min(d,l*0.45),a=Math.atan2(ty-fy,tx-fx);return{x:tx-sa*Math.cos(a),y:ty-sa*Math.sin(a)};}
-          const p0draw=(_dimIsArr&&_dimAtStart)?_sb(p1.x,p1.y,p0.x,p0.y,_ds):p0s;
-          const p1draw=(_dimIsArr&&_dimAtEnd  )?_sb(p0.x,p0.y,p1.x,p1.y,_ds):p1e;
 
           doc.saveGraphicsState();
           doc.setDrawColor(sc.r,sc.g,sc.b);
           doc.setLineWidth(lw);
-          doc.setLineCap('round');
+          // Use butt cap so the line ends flush at the arrowhead tip (no round-cap protrusion)
+          doc.setLineCap(_dimIsArr&&(s.arrow&&s.arrow!=='none')?'butt':'round');
           doc.setLineJoin('round');
           setPdfDash(doc,s.dash,lw);
           if(lineLen>gap*1.1){
             const lEndX=midX-Math.cos(angle)*halfGap, lEndY=midY-Math.sin(angle)*halfGap;
             const rStX=midX+Math.cos(angle)*halfGap, rStY=midY+Math.sin(angle)*halfGap;
-            doc.line(p0draw.x,p0draw.y,lEndX,lEndY);
-            doc.line(rStX,rStY,p1draw.x,p1draw.y);
+            doc.line(p0s.x,p0s.y,lEndX,lEndY);
+            doc.line(rStX,rStY,p1e.x,p1e.y);
           } else {
-            doc.line(p0draw.x,p0draw.y,p1draw.x,p1draw.y);
+            doc.line(p0s.x,p0s.y,p1e.x,p1e.y);
           }
           doc.restoreGraphicsState();
 
