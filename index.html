@@ -3992,32 +3992,18 @@ async function exportAllPdf(){
       // ── Step 6: replay all strokes as native jsPDF vector graphics ────
       drawPdfStrokes(doc,p.file.name,w);
 
-      // ── Step 7: vector watermark via svg2pdf.js ────────────────────────
-      if(watermarkSvgEl){
-        // Ensure SVG has viewBox so svg2pdf.js can scale it correctly
-        if(!watermarkSvgEl.getAttribute('viewBox')){
-          const svgW=parseFloat(watermarkSvgEl.getAttribute('width'))||2507;
-          const svgH=parseFloat(watermarkSvgEl.getAttribute('height'))||985;
-          watermarkSvgEl.setAttribute('viewBox',`0 0 ${svgW} ${svgH}`);
-        }
-        // Match drawWatermark() position/size exactly
-        const wmAspect = 2507 / 985;
+      // ── Step 7: watermark — raster image matching canvas drawWatermark() ──
+      if(WATERMARK_SRC){
+        const wmAspect = 601.48 / 236.11;
         const wmW = Math.round(w * watermarkScalePct / 100);
         const wmH = Math.round(wmW / wmAspect);
         const wmMargin = Math.round(w * 0.018);
         const wmX = w - wmW - wmMargin;
         const wmY = wmMargin;
-        // svg2pdf.js needs the element attached to the DOM for layout
-        const _wmHolder=document.createElement('div');
-        _wmHolder.style.cssText='position:fixed;left:-9999px;top:-9999px;visibility:hidden';
-        _wmHolder.appendChild(watermarkSvgEl);
-        document.body.appendChild(_wmHolder);
-        try{
-          await doc.svg(watermarkSvgEl, {x: wmX, y: wmY, width: wmW, height: wmH});
-        } finally {
-          document.body.removeChild(_wmHolder);
-          _wmHolder.removeChild(watermarkSvgEl);
-        }
+        doc.saveGraphicsState();
+        doc.setGState(new GState({opacity: watermarkOpacity}));
+        doc.addImage(WATERMARK_SRC, 'SVG', wmX, wmY, wmW, wmH);
+        doc.restoreGraphicsState();
       }
 
       if(btn) btn.textContent=`⏳ ${i+1}/${photos.length}…`;
