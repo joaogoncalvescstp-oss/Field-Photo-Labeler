@@ -3992,7 +3992,7 @@ async function exportAllPdf(){
       // ── Step 6: replay all strokes as native jsPDF vector graphics ────
       drawPdfStrokes(doc,p.file.name,w);
 
-      // ── Step 7: watermark — raster image matching canvas drawWatermark() ──
+      // ── Step 7: watermark — decode WATERMARK_SRC base64 SVG → vector PDF ──
       if(WATERMARK_SRC){
         const wmAspect = 601.48 / 236.11;
         const wmW = Math.round(w * watermarkScalePct / 100);
@@ -4000,10 +4000,27 @@ async function exportAllPdf(){
         const wmMargin = Math.round(w * 0.018);
         const wmX = w - wmW - wmMargin;
         const wmY = wmMargin;
-        doc.saveGraphicsState();
-        doc.setGState(new GState({opacity: watermarkOpacity}));
-        doc.addImage(WATERMARK_SRC, 'SVG', wmX, wmY, wmW, wmH);
-        doc.restoreGraphicsState();
+        try{
+          // Decode the same base64 SVG the canvas uses
+          const svgText = atob(WATERMARK_SRC.split(',')[1]);
+          const wmEl = new DOMParser().parseFromString(svgText,'image/svg+xml').documentElement;
+          // Attach to live DOM so svg2pdf.js can measure layout
+          const _h=document.createElement('div');
+          _h.style.cssText='position:fixed;left:-9999px;top:-9999px;visibility:hidden';
+          _h.appendChild(wmEl);
+          document.body.appendChild(_h);
+          try{
+            await doc.svg(wmEl,{x:wmX,y:wmY,width:wmW,height:wmH});
+          } finally {
+            document.body.removeChild(_h);
+          }
+        } catch(e){
+          // Fallback to raster if svg2pdf fails
+          doc.saveGraphicsState();
+          doc.setGState(new GState({opacity:watermarkOpacity}));
+          doc.addImage(WATERMARK_SRC,'SVG',wmX,wmY,wmW,wmH);
+          doc.restoreGraphicsState();
+        }
       }
 
       if(btn) btn.textContent=`⏳ ${i+1}/${photos.length}…`;
