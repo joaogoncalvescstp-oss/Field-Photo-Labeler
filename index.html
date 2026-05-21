@@ -3945,6 +3945,24 @@ async function exportAllPdf(){
       // ── Step 2: create PDF page ────────────────────────────────────────
       if(!doc){
         doc=new jsPDF({orientation:w>=h?'landscape':'portrait',unit:'px',format:[w,h],compress:true,hotfixes:['px_scaling']});
+        // ── PDF document metadata ──────────────────────────────────────────
+        const _metaCityId  = document.getElementById('cityId')?.value?.trim()||'';
+        const _metaSurvey  = document.getElementById('surveyType')?.value?.trim()||document.getElementById('dbMonTypeVal')?.value?.trim()||'';
+        const _metaMonTag  = _metaCityId ? (parseInt(_metaCityId,10)<=300?'PLSS':'MON')+_metaCityId : '';
+        const _metaFPhoto  = photos.find(ph=>ph.date)||photos[0];
+        const _metaDate    = _metaFPhoto?.date ? new Date(_metaFPhoto.date) : new Date();
+        const _metaDateStr = _metaDate.toISOString().slice(0,10);
+        const _metaTitles  = photos.filter(ph=>ph.title).map(ph=>ph.title).join('; ');
+        const _metaTitle   = [_metaMonTag,_metaSurvey,_metaDateStr].filter(Boolean).join(' – ')||'Field Photo Report';
+        const _metaSubject = [_metaSurvey,_metaTitles].filter(Boolean).join(' | ')||'Survey Photos';
+        const _metaKw      = [_metaMonTag,_metaSurvey,_metaDateStr].filter(Boolean).join(', ');
+        doc.setProperties({
+          title:    _metaTitle,
+          subject:  _metaSubject,
+          author:   'City of Saint Paul',
+          keywords: _metaKw,
+          creator:  'Field Photo Labeler'
+        });
       } else {
         doc.addPage([w,h],w>=h?'landscape':'portrait');
       }
