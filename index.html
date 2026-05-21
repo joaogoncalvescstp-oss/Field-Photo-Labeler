@@ -3735,29 +3735,31 @@ async function exportAllPdf(){
           const _dimAtEnd=s.arrow==='end'||s.arrow==='both';
           const _dimAtStart=s.arrow==='start'||s.arrow==='both';
 
-          // Setback: pull line end back just far enough that the arrowhead triangle
-          // is at least as wide as the line at that point, preventing line sides
-          // from poking through the arrowhead. setback = (lw/2) / tan(halfAngle)
-          const _halfAngleRad=(s.arrowAngle||arrowAngle||15)*Math.PI/180;
-          const _arrowSB=_dimIsArr ? Math.ceil((lw/2)/Math.tan(_halfAngleRad)) : 0;
-          function _sb2(fx,fy,tx,ty,d){const l=Math.hypot(tx-fx,ty-fy);if(l<1||d<=0)return{x:tx,y:ty};const a2=Math.atan2(ty-fy,tx-fx);return{x:tx-Math.min(d,l*0.4)*Math.cos(a2),y:ty-Math.min(d,l*0.4)*Math.sin(a2)};}
-          const p0draw=(_dimIsArr&&_dimAtStart)?_sb2(p1.x,p1.y,p0.x,p0.y,_arrowSB):p0s;
-          const p1draw=(_dimIsArr&&_dimAtEnd  )?_sb2(p0.x,p0.y,p1.x,p1.y,_arrowSB):p1e;
+          // Stop line body at the arrowhead BASE (= full arrowhead length back from tip)
+          // so the filled triangle fully covers the line end — matches canvas setbackDist=aLen.
+          // Guards prevent drawing backwards segments when arrowhead exceeds half-segment length.
+          const _arrowSB=_dimIsArr ? _ds : 0;
+          const cosA=Math.cos(angle), sinA=Math.sin(angle);
+          const p0draw=(_dimIsArr&&_dimAtStart)?{x:p0s.x+_arrowSB*cosA,y:p0s.y+_arrowSB*sinA}:p0s;
+          const p1draw=(_dimIsArr&&_dimAtEnd  )?{x:p1e.x-_arrowSB*cosA,y:p1e.y-_arrowSB*sinA}:p1e;
 
           doc.saveGraphicsState();
           doc.setDrawColor(sc.r,sc.g,sc.b);
           doc.setLineWidth(lw);
-          // Butt cap on arrow ends (no round-cap protrusion into the arrowhead's narrow tip)
           doc.setLineCap(_dimIsArr?'butt':'round');
           doc.setLineJoin('round');
           setPdfDash(doc,s.dash,lw);
           if(lineLen>gap*1.1){
-            const lEndX=midX-Math.cos(angle)*halfGap, lEndY=midY-Math.sin(angle)*halfGap;
-            const rStX=midX+Math.cos(angle)*halfGap, rStY=midY+Math.sin(angle)*halfGap;
-            doc.line(p0draw.x,p0draw.y,lEndX,lEndY);
-            doc.line(rStX,rStY,p1draw.x,p1draw.y);
+            const lEndX=midX-cosA*halfGap, lEndY=midY-sinA*halfGap;
+            const rStX=midX+cosA*halfGap, rStY=midY+sinA*halfGap;
+            // dot-product sign check: only draw if the segment runs toward the label gap
+            const leftOk =(lEndX-p0draw.x)*cosA+(lEndY-p0draw.y)*sinA>1;
+            const rightOk=(p1draw.x-rStX)*cosA+(p1draw.y-rStY)*sinA>1;
+            if(leftOk)  doc.line(p0draw.x,p0draw.y,lEndX,lEndY);
+            if(rightOk) doc.line(rStX,rStY,p1draw.x,p1draw.y);
           } else {
-            doc.line(p0draw.x,p0draw.y,p1draw.x,p1draw.y);
+            const bodyOk=(p1draw.x-p0draw.x)*cosA+(p1draw.y-p0draw.y)*sinA>1;
+            if(bodyOk) doc.line(p0draw.x,p0draw.y,p1draw.x,p1draw.y);
           }
           doc.restoreGraphicsState();
 
