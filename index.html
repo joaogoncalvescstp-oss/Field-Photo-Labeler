@@ -2102,25 +2102,31 @@ function drawStroke(tCtx,s){
     const p1End=isCirc ? {x: p1.x - Math.cos(angle)*circRadius, y: p1.y - Math.sin(angle)*circRadius} : p1;
 
     // ── Draw line with gap in the middle ──────────────────────────
+    const _isArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
+    const _atEnd=s.arrow==='end'||s.arrow==='both';
+    const _atStart=s.arrow==='start'||s.arrow==='both';
+    const cosA=Math.cos(angle), sinA=Math.sin(angle);
+    // Stop line at arrowhead base so the filled triangle fully covers the line end
+    const _sbDist=_isArr?_ds:0;
+    const p0draw=(_isArr&&_atStart)?{x:p0Start.x+_sbDist*cosA,y:p0Start.y+_sbDist*sinA}:p0Start;
+    const p1draw=(_isArr&&_atEnd  )?{x:p1End.x  -_sbDist*cosA,y:p1End.y  -_sbDist*sinA}:p1End;
+
     tCtx.save();
     tCtx.strokeStyle=col; tCtx.lineWidth=lw2;
-    tCtx.lineCap='round'; tCtx.lineJoin='round';
+    tCtx.lineCap=_isArr?'butt':'round'; tCtx.lineJoin='round';
     tCtx.setLineDash(getDashArray(s.dash,lw2));
     tCtx.shadowColor='rgba(0,0,0,.5)'; tCtx.shadowBlur=4;
 
-    // Left segment: from p0 to midpoint - halfGap
     if(lineLen > gap*1.1){
-      // Left half
-      const lEndX=midX - Math.cos(angle)*halfGap;
-      const lEndY=midY - Math.sin(angle)*halfGap;
-      tCtx.beginPath(); tCtx.moveTo(p0Start.x,p0Start.y); tCtx.lineTo(lEndX,lEndY); tCtx.stroke();
-      // Right half
-      const rStX=midX + Math.cos(angle)*halfGap;
-      const rStY=midY + Math.sin(angle)*halfGap;
-      tCtx.beginPath(); tCtx.moveTo(rStX,rStY); tCtx.lineTo(p1End.x,p1End.y); tCtx.stroke();
+      const lEndX=midX - cosA*halfGap, lEndY=midY - sinA*halfGap;
+      const rStX =midX + cosA*halfGap, rStY =midY + sinA*halfGap;
+      const leftOk =(lEndX-p0draw.x)*cosA+(lEndY-p0draw.y)*sinA>1;
+      const rightOk=(p1draw.x-rStX )*cosA+(p1draw.y-rStY )*sinA>1;
+      if(leftOk ){ tCtx.beginPath(); tCtx.moveTo(p0draw.x,p0draw.y); tCtx.lineTo(lEndX,lEndY); tCtx.stroke(); }
+      if(rightOk){ tCtx.beginPath(); tCtx.moveTo(rStX,rStY); tCtx.lineTo(p1draw.x,p1draw.y); tCtx.stroke(); }
     } else {
-      // Line too short for gap — draw full line
-      tCtx.beginPath(); tCtx.moveTo(p0Start.x,p0Start.y); tCtx.lineTo(p1End.x,p1End.y); tCtx.stroke();
+      const bodyOk=(p1draw.x-p0draw.x)*cosA+(p1draw.y-p0draw.y)*sinA>1;
+      if(bodyOk){ tCtx.beginPath(); tCtx.moveTo(p0draw.x,p0draw.y); tCtx.lineTo(p1draw.x,p1draw.y); tCtx.stroke(); }
     }
     tCtx.restore();
 
