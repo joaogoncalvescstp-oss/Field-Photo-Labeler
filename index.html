@@ -709,11 +709,11 @@
           oninput="arrowWidth=parseInt(this.value);document.getElementById('arrowWVal').textContent=this.value;document.getElementById('arrowWInput').value=this.value">
         
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-          <label style="flex:1;margin:0">Arrow Angle <span id="arrowAngleVal">30</span>°</label>
-          <input type="number" id="arrowAngleInput" min="5" max="85" value="30" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px"
+          <label style="flex:1;margin:0">Arrow Angle <span id="arrowAngleVal">15</span>°</label>
+          <input type="number" id="arrowAngleInput" min="5" max="85" value="15" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px"
             onchange="arrowAngle=parseInt(this.value);document.getElementById('arrowAngleSlider').value=this.value;document.getElementById('arrowAngleVal').textContent=this.value" onkeyup="if(event.key==='Enter') this.onchange()">
         </div>
-        <input type="range" id="arrowAngleSlider" min="5" max="85" value="30" style="width:100%"
+        <input type="range" id="arrowAngleSlider" min="5" max="85" value="15" style="width:100%"
           oninput="arrowAngle=parseInt(this.value);document.getElementById('arrowAngleVal').textContent=this.value;document.getElementById('arrowAngleInput').value=this.value">
         <button class="btn btn-danger btn-sm" style="margin-top:2px" onclick="clearAllStrokes()">✕ Clear All Strokes</button>
       </div>
@@ -1134,6 +1134,7 @@ let dimMode     = false;   // when true, drawn lines get a dimension label
 let arrowStyle  = 'none';    // 'none'|'end'|'start'|'both'
 let arrowSize   = 82;        // arrowhead length in px
 let arrowWidth  = 25;        // arrowhead width (base) in px
+let arrowAngle  = 15;        // arrowhead half-angle in degrees
 // strokes[filename] = [ {type,color,width,dash,points:[{x,y}]} ]
 let strokes     = {};
 let currentStroke = null;    // stroke being drawn
@@ -3730,6 +3731,14 @@ async function exportAllPdf(){
           const p0s=isCircArrow?{x:p0.x+Math.cos(angle)*circRadius,y:p0.y+Math.sin(angle)*circRadius}:p0;
           const p1e=isCircArrow?{x:p1.x-Math.cos(angle)*circRadius,y:p1.y-Math.sin(angle)*circRadius}:p1;
 
+          // Setback endpoints so line stops at arrowhead base (not tip)
+          const _dimIsArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
+          const _dimAtEnd=s.arrow==='end'||s.arrow==='both';
+          const _dimAtStart=s.arrow==='start'||s.arrow==='both';
+          function _sb(fx,fy,tx,ty,d){const l=Math.hypot(tx-fx,ty-fy);if(l<1)return{x:tx,y:ty};const sa=Math.min(d,l*0.45),a=Math.atan2(ty-fy,tx-fx);return{x:tx-sa*Math.cos(a),y:ty-sa*Math.sin(a)};}
+          const p0draw=(_dimIsArr&&_dimAtStart)?_sb(p1.x,p1.y,p0.x,p0.y,_ds):p0s;
+          const p1draw=(_dimIsArr&&_dimAtEnd  )?_sb(p0.x,p0.y,p1.x,p1.y,_ds):p1e;
+
           doc.saveGraphicsState();
           doc.setDrawColor(sc.r,sc.g,sc.b);
           doc.setLineWidth(lw);
@@ -3739,28 +3748,27 @@ async function exportAllPdf(){
           if(lineLen>gap*1.1){
             const lEndX=midX-Math.cos(angle)*halfGap, lEndY=midY-Math.sin(angle)*halfGap;
             const rStX=midX+Math.cos(angle)*halfGap, rStY=midY+Math.sin(angle)*halfGap;
-            doc.line(p0s.x,p0s.y,lEndX,lEndY);
-            doc.line(rStX,rStY,p1e.x,p1e.y);
+            doc.line(p0draw.x,p0draw.y,lEndX,lEndY);
+            doc.line(rStX,rStY,p1draw.x,p1draw.y);
           } else {
-            doc.line(p0s.x,p0s.y,p1e.x,p1e.y);
+            doc.line(p0draw.x,p0draw.y,p1draw.x,p1draw.y);
           }
           doc.restoreGraphicsState();
 
           // End markers / arrowheads
           if(s.arrow&&s.arrow!=='none'){
             const _thk=s.arrowWidth||arrowWidth||25;
-            const isArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
             const isDot=s.arrow==='dot'||s.arrow==='dotboth';
             const isTick=s.arrow==='tick'||s.arrow==='tickboth';
             const isCircM=s.arrow==='circ'||s.arrow==='circboth';
-            const atEnd=s.arrow==='end'||s.arrow==='both'||s.arrow==='dot'||s.arrow==='tick'||s.arrow==='circ'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
-            const atStart=s.arrow==='start'||s.arrow==='both'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
-            if(atEnd){
-              if(isArr) pdfArrowHead(doc,p0.x,p0.y,p1.x,p1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||30);
+            const _atEnd=s.arrow==='end'||s.arrow==='both'||s.arrow==='dot'||s.arrow==='tick'||s.arrow==='circ'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
+            const _atStart=s.arrow==='start'||s.arrow==='both'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
+            if(_atEnd){
+              if(_dimIsArr) pdfArrowHead(doc,p0.x,p0.y,p1.x,p1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
               else if(isDot||isTick||isCircM) pdfEndMarker(doc,p0.x,p0.y,p1.x,p1.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
             }
-            if(atStart){
-              if(isArr) pdfArrowHead(doc,p1.x,p1.y,p0.x,p0.y,lw,sc,_ds,s.arrowAngle||arrowAngle||30);
+            if(_atStart){
+              if(_dimIsArr) pdfArrowHead(doc,p1.x,p1.y,p0.x,p0.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
               else if(isDot||isTick||isCircM) pdfEndMarker(doc,p1.x,p1.y,p0.x,p0.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
             }
           }
@@ -3838,11 +3846,11 @@ async function exportAllPdf(){
             const ep0=pts[n-2], ep1=pts[n-1];
             const sp0=pts[1],   sp1=pts[0];
             if(atEnd){
-              if(isArr) pdfArrowHead(doc,ep0.x,ep0.y,ep1.x,ep1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||30);
+              if(isArr) pdfArrowHead(doc,ep0.x,ep0.y,ep1.x,ep1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
               else if(isDot||isTick||isCircM) pdfEndMarker(doc,ep0.x,ep0.y,ep1.x,ep1.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
             }
             if(atStart){
-              if(isArr) pdfArrowHead(doc,sp0.x,sp0.y,sp1.x,sp1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||30);
+              if(isArr) pdfArrowHead(doc,sp0.x,sp0.y,sp1.x,sp1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
               else if(isDot||isTick||isCircM) pdfEndMarker(doc,sp0.x,sp0.y,sp1.x,sp1.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
             }
           }
