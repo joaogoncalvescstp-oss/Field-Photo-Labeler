@@ -3747,7 +3747,8 @@ async function exportAllPdf(){
           doc.saveGraphicsState();
           doc.setDrawColor(sc.r,sc.g,sc.b);
           doc.setLineWidth(lw);
-          doc.setLineCap('round');
+          // Butt cap on arrow ends (no round-cap protrusion into the arrowhead's narrow tip)
+          doc.setLineCap(_dimIsArr?'butt':'round');
           doc.setLineJoin('round');
           setPdfDash(doc,s.dash,lw);
           if(lineLen>gap*1.1){
