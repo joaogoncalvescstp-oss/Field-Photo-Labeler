@@ -3645,17 +3645,16 @@ async function exportAllPdf(){
         doc.setFont('Helvetica',bold?'bold':'normal');
 
         if(fontOutline){
-          // Simulate outline by drawing dark text at small offsets
-          doc.setTextColor(oc2.r,oc2.g,oc2.b);
-          const off=Math.max(1,Math.round(outW*0.5));
-          [[-off,-off],[off,-off],[-off,off],[off,off]].forEach(([dx,dy])=>{
-            doc.text(line,textX+dx,baselineY+dy,{align:jsPdfAlign});
-          });
+          // True vector stroke outline — matches canvas strokeText
+          doc.setDrawColor(oc2.r,oc2.g,oc2.b);
+          doc.setLineWidth(outW);
+          doc.setLineJoin('round');
+          doc.text(line,textX,baselineY,{align:jsPdfAlign,renderingMode:'stroke'});
         }
 
-        // Main text
+        // Main fill text on top
         doc.setTextColor(tc.r,tc.g,tc.b);
-        doc.text(line,textX,baselineY,{align:jsPdfAlign});
+        doc.text(line,textX,baselineY,{align:jsPdfAlign,renderingMode:'fill'});
       });
     }
 
@@ -3794,14 +3793,13 @@ async function exportAllPdf(){
           doc.setFont('Helvetica','bold');
           doc.setFontSize(fs * 0.8);
           if(fontOutline){
-            doc.setTextColor(oc2.r,oc2.g,oc2.b);
-            const off=Math.max(1,Math.round(outW*0.5));
-            [[-off,-off],[off,-off],[-off,off],[off,off]].forEach(([dx,dy])=>{
-              doc.text(label,midX+dx,midY+fs*0.35+dy,{align:'center'});
-            });
+            doc.setDrawColor(oc2.r,oc2.g,oc2.b);
+            doc.setLineWidth(outW);
+            doc.setLineJoin('round');
+            doc.text(label,midX,midY+fs*0.35,{align:'center',renderingMode:'stroke'});
           }
           doc.setTextColor(sc.r,sc.g,sc.b);
-          doc.text(label,midX,midY+fs*0.35,{align:'center'});
+          doc.text(label,midX,midY+fs*0.35,{align:'center',renderingMode:'fill'});
           doc.restoreGraphicsState();
 
         } else if(s.type==='spline'){
