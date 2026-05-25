@@ -400,8 +400,11 @@
       <div style="display:flex;gap:6px;flex-direction:column;margin-top:6px">
         <button class="btn btn-secondary" onclick="openBatchModal()">⚡ Open Batch Manager</button>
         <button class="btn btn-secondary" onclick="openReorderModal()">⇅ Edit Slide &amp; Overlay Order</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('zipImportInput').click()">📥 Import ZIP</button>
       </div>
     </div>
+
+    <input type="file" id="zipImportInput" accept=".zip" style="display:none">
 
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
     <div id="thumbStrip" class="thumb-strip" style="display:none"></div>
@@ -1190,6 +1193,7 @@ function init() {
   buildSwatches('penColorRow', ['#ffff00','#f0a500','#ffffff','#f85149','#3fb950','#58a6ff','#000000'], '#ffff00', c=>{penColor=c;});
 
   document.getElementById('fileInput').addEventListener('change',      e=>loadFiles([...e.target.files]));
+  document.getElementById('zipImportInput').addEventListener('change', e=>{const f=e.target.files[0];e.target.value='';if(f) importFromZip(f);});
   document.getElementById('csvInput').addEventListener('change',       e=>loadCSV(e.target.files[0]));
   document.getElementById('descTxtInput').addEventListener('change',   e=>loadDescTxt(e.target.files[0]));
   document.getElementById('circleImgInput').addEventListener('change', e=>loadCircleSource(e.target.files[0]));
@@ -1265,6 +1269,38 @@ function loadFiles(files){
     };
     reader.readAsDataURL(file);
   });
+}
+
+async function importFromZip(zipFile){
+  let JSZip;
+  try{
+    JSZip=await loadJSZip();
+  }catch(e){
+    alert('Could not load ZIP library. Check your connection and try again.');
+    return;
+  }
+  let zip;
+  try{
+    zip=await JSZip.loadAsync(zipFile);
+  }catch(e){
+    alert('Could not read ZIP file. Make sure it is a valid .zip archive.');
+    return;
+  }
+  const IMAGE_EXTS=/\.(jpe?g|png|gif|webp|heic|heif|tiff?)$/i;
+  const entries=Object.values(zip.files).filter(f=>!f.dir&&IMAGE_EXTS.test(f.name));
+  if(!entries.length){
+    alert('No image files found inside the ZIP.');
+    return;
+  }
+  // Sort by filename so slides come in the same order they were exported
+  entries.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  const files=await Promise.all(entries.map(async entry=>{
+    const blob=await entry.async('blob');
+    const shortName=entry.name.replace(/.*[/\\]/,'');
+    const mime=shortName.match(/\.png$/i)?'image/png':shortName.match(/\.(gif)$/i)?'image/gif':'image/jpeg';
+    return new File([blob],shortName,{type:mime});
+  }));
+  loadFiles(files);
 }
 
 function defaultLabelPos(w,h){
