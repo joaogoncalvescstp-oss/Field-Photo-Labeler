@@ -889,6 +889,7 @@
         <span class="icon">🗂</span>Click or drag all survey slide images here
       </div>
       <input type="file" id="batchSlidesInput" accept="image/*" multiple style="display:none">
+      <input type="file" id="batchSlidesZipInput" accept=".zip" style="display:none">
       <div class="batch-list" id="batchSlidesList"></div>
       <div class="progress-bar-wrap" id="batchProg1Wrap" style="display:none;margin-top:10px">
         <div class="progress-bar" id="batchProg1Bar" style="width:0%"></div>
@@ -896,6 +897,7 @@
       <div class="batch-status" id="batchStatus1"></div>
       <div class="modal-actions" style="margin-top:10px">
         <button class="btn btn-secondary" style="width:auto" onclick="closeBatchModal()">Close</button>
+        <button class="btn btn-secondary" style="width:auto" onclick="document.getElementById('batchSlidesZipInput').click()">📦 Load from ZIP</button>
         <button class="btn btn-primary" style="width:auto" id="loadSlidesBtn" onclick="runLoadSlides()" disabled>📥 Load Slides</button>
       </div>
     </div>
@@ -910,6 +912,10 @@
           <span class="icon">🔍</span>Click or drag all Tie close-up images here (in Tie A, B, C … order)
         </div>
         <input type="file" id="batchCloseupsInput" accept="image/*" multiple style="display:none">
+        <input type="file" id="batchCloseupsZipInput" accept=".zip" style="display:none">
+        <div style="margin-top:8px">
+          <button class="btn btn-secondary" style="width:auto" onclick="document.getElementById('batchCloseupsZipInput').click()">📦 Load Close-ups from ZIP</button>
+        </div>
       </div>
 
       <!-- Queue + crop editor (shown after files loaded) -->
@@ -1271,71 +1277,49 @@ function loadFiles(files){
   });
 }
 
-async function importFromZip(zipFile){
-  let JSZip;
-  try{ JSZip=await loadJSZip(); }
-  catch(e){ alert('Could not load ZIP library. Check your connection and try again.'); return; }
-  let zip;
-  try{ zip=await JSZip.loadAsync(zipFile); }
-  catch(e){ alert('Could not read ZIP file. Make sure it is a valid .zip archive.'); return; }
-
+// ── Generic ZIP image extractor used by all ZIP-load paths ────────────
+async function extractImagesFromZip(zipFile){
+  const JSZip=await loadJSZip();
+  const zip=await JSZip.loadAsync(zipFile);
   const IMAGE_EXTS=/\.(jpe?g|png|gif|webp|heic|heif|tiff?)$/i;
   const entries=Object.values(zip.files).filter(f=>!f.dir&&IMAGE_EXTS.test(f.name));
-  if(!entries.length){ alert('No image files found inside the ZIP.'); return; }
-
-  // Flatten paths, build File objects, sort by survey filename order
+  if(!entries.length) return null;
   const files=await Promise.all(entries.map(async entry=>{
     const blob=await entry.async('blob');
     const shortName=entry.name.replace(/.*[/\\]/,'');
     const mime=shortName.match(/\.png$/i)?'image/png':shortName.match(/\.(gif)$/i)?'image/gif':'image/jpeg';
     return new File([blob],shortName,{type:mime});
   }));
-  const sorted=sortFilesByName(files);
+  return files;
+}
 
-  // Decide whether we have survey-named files or generic images
-  const hasSurveyNames=sorted.some(f=>parseSurveyFilename(f.name).type!=='unknown');
-  if(!hasSurveyNames){ loadFiles(sorted); return; }
+// Sidebar "Import ZIP" — simple load all images
+async function importFromZip(zipFile){
+  let files;
+  try{ files=await extractImagesFromZip(zipFile); }
+  catch(e){ alert('Could not read ZIP file. Check your connection and try again.'); return; }
+  if(!files){ alert('No image files found inside the ZIP.'); return; }
+  loadFiles(files);
+}
 
-  // Split into main slides and tie close-ups
-  const isCloseup=f=>{ const p=parseSurveyFilename(f.name); return p.type==='tie'&&p.isCloseup; };
-  const mainFiles   =sorted.filter(f=>!isCloseup(f));
-  const closeupFiles=sorted.filter(f=> isCloseup(f));
+// Batch Manager Tab 1 — populate slide list from ZIP then let user click "Load Slides"
+async function importSlidesFromZip(zipFile){
+  let files;
+  try{ files=await extractImagesFromZip(zipFile); }
+  catch(e){ alert('Could not read ZIP file.'); return; }
+  if(!files){ alert('No image files found inside the ZIP.'); return; }
+  batchSlideFiles=sortFilesByName(files);
+  renderBatchSlideList();
+  document.getElementById('batchStatus1').textContent=`${files.length} image(s) loaded from ZIP — click "Load Slides" to continue.`;
+}
 
-  // ── Load main slides (mirrors runLoadSlides) ───────────────────────────
-  if(mainFiles.length){
-    photos=[];current=-1;overlayState={};strokes={};tieBakedImgs={};tieSourceImgs={};tieSourceData={};multiOverlays={};activeOvIdx={};
-    document.getElementById('thumbStrip').style.display='none';
-    document.getElementById('emptyState').style.display='flex';
-    document.getElementById('canvasWrap').style.display='none';
-    document.getElementById('canvasToolbar').style.display='none';
-
-    const loaded=await Promise.all(mainFiles.map(file=>new Promise(resolve=>{
-      const p=parseSurveyFilename(file.name);
-      const isTie=p.type==='tie'&&!p.isCloseup;
-      const tieIdx=isTie?(p.letter.charCodeAt(0)-65):-1;
-      const title=p.type!=='unknown'?titleFromFilename(file):file.name.replace(/\.[^.]+$/,'');
-      const photo={file,img:null,title,date:null,desc:csvMap[file.name]||'',descAlign:'center',pos:null,
-                   tieIndex:tieIdx,tieLetter:isTie?p.letter:null};
-      extractExifDate(file).then(d=>{photo.date=d||formatDate(new Date());});
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        const img=new Image();
-        img.onload=()=>{ photo.img=img; photo.pos=defaultLabelPos(img.naturalWidth,img.naturalHeight); resolve(photo); };
-        img.src=ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    })));
-    loaded.forEach(p=>photos.push(p));
-    renderThumbs();
-    selectPhoto(0);
-  }
-
-  // ── Route close-ups to crop queue (Batch Manager Tab 2) ───────────────
-  if(closeupFiles.length){
-    openBatchModal();
-    switchBatchOpt(2);
-    await loadTieCloseupQueue(closeupFiles);
-  }
+// Batch Manager Tab 2 — load close-ups from ZIP straight into crop queue
+async function importCloseupsFromZip(zipFile){
+  let files;
+  try{ files=await extractImagesFromZip(zipFile); }
+  catch(e){ alert('Could not read ZIP file.'); return; }
+  if(!files){ alert('No image files found inside the ZIP.'); return; }
+  loadTieCloseupQueue(sortFilesByName(files));
 }
 
 function defaultLabelPos(w,h){
@@ -4287,6 +4271,9 @@ function setupBatchModal(){
     batchSlideFiles = sortFilesByName([...e.target.files]);
     renderBatchSlideList();
   });
+  document.getElementById('batchSlidesZipInput').addEventListener('change', e=>{
+    const f=e.target.files[0]; e.target.value=''; if(f) importSlidesFromZip(f);
+  });
   setupBatchDrop('batchSlidesDrop', files=>{
     batchSlideFiles = sortFilesByName(files);
     renderBatchSlideList();
@@ -4295,6 +4282,9 @@ function setupBatchModal(){
   // Option 2: close-ups
   document.getElementById('batchCloseupsInput').addEventListener('change', e=>{
     loadTieCloseupQueue(sortFilesByName([...e.target.files]));
+  });
+  document.getElementById('batchCloseupsZipInput').addEventListener('change', e=>{
+    const f=e.target.files[0]; e.target.value=''; if(f) importCloseupsFromZip(f);
   });
   setupBatchDrop('batchCloseupsDrop', files=>{
     loadTieCloseupQueue(sortFilesByName(files));
