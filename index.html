@@ -1273,34 +1273,69 @@ function loadFiles(files){
 
 async function importFromZip(zipFile){
   let JSZip;
-  try{
-    JSZip=await loadJSZip();
-  }catch(e){
-    alert('Could not load ZIP library. Check your connection and try again.');
-    return;
-  }
+  try{ JSZip=await loadJSZip(); }
+  catch(e){ alert('Could not load ZIP library. Check your connection and try again.'); return; }
   let zip;
-  try{
-    zip=await JSZip.loadAsync(zipFile);
-  }catch(e){
-    alert('Could not read ZIP file. Make sure it is a valid .zip archive.');
-    return;
-  }
+  try{ zip=await JSZip.loadAsync(zipFile); }
+  catch(e){ alert('Could not read ZIP file. Make sure it is a valid .zip archive.'); return; }
+
   const IMAGE_EXTS=/\.(jpe?g|png|gif|webp|heic|heif|tiff?)$/i;
   const entries=Object.values(zip.files).filter(f=>!f.dir&&IMAGE_EXTS.test(f.name));
-  if(!entries.length){
-    alert('No image files found inside the ZIP.');
-    return;
-  }
-  // Sort by filename so slides come in the same order they were exported
-  entries.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  if(!entries.length){ alert('No image files found inside the ZIP.'); return; }
+
+  // Flatten paths, build File objects, sort by survey filename order
   const files=await Promise.all(entries.map(async entry=>{
     const blob=await entry.async('blob');
     const shortName=entry.name.replace(/.*[/\\]/,'');
     const mime=shortName.match(/\.png$/i)?'image/png':shortName.match(/\.(gif)$/i)?'image/gif':'image/jpeg';
     return new File([blob],shortName,{type:mime});
   }));
-  loadFiles(files);
+  const sorted=sortFilesByName(files);
+
+  // Decide whether we have survey-named files or generic images
+  const hasSurveyNames=sorted.some(f=>parseSurveyFilename(f.name).type!=='unknown');
+  if(!hasSurveyNames){ loadFiles(sorted); return; }
+
+  // Split into main slides and tie close-ups
+  const isCloseup=f=>{ const p=parseSurveyFilename(f.name); return p.type==='tie'&&p.isCloseup; };
+  const mainFiles   =sorted.filter(f=>!isCloseup(f));
+  const closeupFiles=sorted.filter(f=> isCloseup(f));
+
+  // ── Load main slides (mirrors runLoadSlides) ───────────────────────────
+  if(mainFiles.length){
+    photos=[];current=-1;overlayState={};strokes={};tieBakedImgs={};tieSourceImgs={};tieSourceData={};multiOverlays={};activeOvIdx={};
+    document.getElementById('thumbStrip').style.display='none';
+    document.getElementById('emptyState').style.display='flex';
+    document.getElementById('canvasWrap').style.display='none';
+    document.getElementById('canvasToolbar').style.display='none';
+
+    const loaded=await Promise.all(mainFiles.map(file=>new Promise(resolve=>{
+      const p=parseSurveyFilename(file.name);
+      const isTie=p.type==='tie'&&!p.isCloseup;
+      const tieIdx=isTie?(p.letter.charCodeAt(0)-65):-1;
+      const title=p.type!=='unknown'?titleFromFilename(file):file.name.replace(/\.[^.]+$/,'');
+      const photo={file,img:null,title,date:null,desc:csvMap[file.name]||'',descAlign:'center',pos:null,
+                   tieIndex:tieIdx,tieLetter:isTie?p.letter:null};
+      extractExifDate(file).then(d=>{photo.date=d||formatDate(new Date());});
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const img=new Image();
+        img.onload=()=>{ photo.img=img; photo.pos=defaultLabelPos(img.naturalWidth,img.naturalHeight); resolve(photo); };
+        img.src=ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    })));
+    loaded.forEach(p=>photos.push(p));
+    renderThumbs();
+    selectPhoto(0);
+  }
+
+  // ── Route close-ups to crop queue (Batch Manager Tab 2) ───────────────
+  if(closeupFiles.length){
+    openBatchModal();
+    switchBatchOpt(2);
+    await loadTieCloseupQueue(closeupFiles);
+  }
 }
 
 function defaultLabelPos(w,h){
