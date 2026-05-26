@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -710,11 +709,11 @@
           oninput="arrowWidth=parseInt(this.value);document.getElementById('arrowWVal').textContent=this.value;document.getElementById('arrowWInput').value=this.value">
         
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-          <label style="flex:1;margin:0">Arrow Angle <span id="arrowAngleVal">30</span>°</label>
-          <input type="number" id="arrowAngleInput" min="5" max="85" value="30" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px"
+          <label style="flex:1;margin:0">Arrow Angle <span id="arrowAngleVal">15</span>°</label>
+          <input type="number" id="arrowAngleInput" min="5" max="85" value="15" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px"
             onchange="arrowAngle=parseInt(this.value);document.getElementById('arrowAngleSlider').value=this.value;document.getElementById('arrowAngleVal').textContent=this.value" onkeyup="if(event.key==='Enter') this.onchange()">
         </div>
-        <input type="range" id="arrowAngleSlider" min="5" max="85" value="30" style="width:100%"
+        <input type="range" id="arrowAngleSlider" min="5" max="85" value="15" style="width:100%"
           oninput="arrowAngle=parseInt(this.value);document.getElementById('arrowAngleVal').textContent=this.value;document.getElementById('arrowAngleInput').value=this.value">
         <button class="btn btn-danger btn-sm" style="margin-top:2px" onclick="clearAllStrokes()">✕ Clear All Strokes</button>
       </div>
@@ -774,6 +773,7 @@
         <button class="btn btn-green" onclick="exportAllJPGs()">⬇ All JPGs</button>
       </div>
       <button class="btn btn-secondary" onclick="exportZIP()" style="margin-top:8px">🗜 Export All as ZIP</button>
+      <button class="btn btn-secondary" onclick="exportAllPdf()" style="margin-top:6px" title="Export all slides as PDF">📄 Export PDF</button>
       <button class="btn btn-secondary" onclick="exportCSV()" style="margin-top:6px">📄 Export CSV Log</button>
       <button class="btn btn-secondary" onclick="shareCurrentJPG()" id="btnShare" style="margin-top:6px">
         ↗ Share Current Slide
@@ -886,6 +886,7 @@
         <span class="icon">🗂</span>Click or drag all survey slide images here
       </div>
       <input type="file" id="batchSlidesInput" accept="image/*" multiple style="display:none">
+      <input type="file" id="batchSlidesZipInput" accept=".zip" style="display:none">
       <div class="batch-list" id="batchSlidesList"></div>
       <div class="progress-bar-wrap" id="batchProg1Wrap" style="display:none;margin-top:10px">
         <div class="progress-bar" id="batchProg1Bar" style="width:0%"></div>
@@ -893,6 +894,7 @@
       <div class="batch-status" id="batchStatus1"></div>
       <div class="modal-actions" style="margin-top:10px">
         <button class="btn btn-secondary" style="width:auto" onclick="closeBatchModal()">Close</button>
+        <button class="btn btn-secondary" style="width:auto" onclick="document.getElementById('batchSlidesZipInput').click()">📦 Load from ZIP</button>
         <button class="btn btn-primary" style="width:auto" id="loadSlidesBtn" onclick="runLoadSlides()" disabled>📥 Load Slides</button>
       </div>
     </div>
@@ -907,6 +909,10 @@
           <span class="icon">🔍</span>Click or drag all Tie close-up images here (in Tie A, B, C … order)
         </div>
         <input type="file" id="batchCloseupsInput" accept="image/*" multiple style="display:none">
+        <input type="file" id="batchCloseupsZipInput" accept=".zip" style="display:none">
+        <div style="margin-top:8px">
+          <button class="btn btn-secondary" style="width:auto" onclick="document.getElementById('batchCloseupsZipInput').click()">📦 Load Close-ups from ZIP</button>
+        </div>
       </div>
 
       <!-- Queue + crop editor (shown after files loaded) -->
@@ -992,6 +998,8 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════
 //  CONSTANTS
@@ -1042,6 +1050,15 @@ let watermarkScalePct = 20;  // % of photo width
   const img = new Image();
   img.onload = () => { watermarkImg = img; refreshCanvas(); };
   img.src = WATERMARK_SRC;
+})();
+
+// Pre-load watermark as SVG DOM element for vector PDF embedding (inline – no fetch needed)
+let watermarkSvgEl = null;
+(function(){
+  try{
+    const _svgStr="<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"2507px\" height=\"985px\" style=\"shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n<g><path style=\"opacity:1\" fill=\"#1f64ce\" d=\"M 156.5,157.5 C 311.5,157.5 466.5,157.5 621.5,157.5C 621.5,380.833 621.5,604.167 621.5,827.5C 466.5,827.5 311.5,827.5 156.5,827.5C 156.5,604.167 156.5,380.833 156.5,157.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f8f9f9\" d=\"M 385.5,244.5 C 394.215,243.536 396.548,246.869 392.5,254.5C 393.471,260.243 395.137,265.743 397.5,271C 401.894,270.503 404.228,272.336 404.5,276.5C 405.5,276.5 406.5,276.5 407.5,276.5C 406.108,282.984 405.442,289.651 405.5,296.5C 405.532,300.552 405.865,304.552 406.5,308.5C 410.904,311.806 414.237,315.973 416.5,321C 453.229,338.411 475.895,367.078 484.5,407C 485.476,415.568 486.642,424.068 488,432.5C 492.749,433.305 497.582,433.805 502.5,434C 503.5,435.667 504.5,437.333 505.5,439C 507.676,439.163 509.509,439.996 511,441.5C 513.642,450.913 511.309,458.579 504,464.5C 503.667,474.5 503.333,484.5 503,494.5C 500.294,497.978 497.294,498.311 494,495.5C 493.353,488.562 491.686,481.895 489,475.5C 486.428,473.671 484.094,471.671 482,469.5C 481.927,463.209 480.594,457.209 478,451.5C 476.066,448.312 473.232,446.812 469.5,447C 467.899,443.933 465.732,441.433 463,439.5C 461.395,440.101 460.062,441.101 459,442.5C 458.22,445.512 457.053,448.345 455.5,451C 452.666,451.045 450.166,451.879 448,453.5C 444.342,461.755 442.342,470.422 442,479.5C 438.026,480.807 435.359,483.474 434,487.5C 431.901,493.994 430.568,500.661 430,507.5C 428.644,508.38 427.144,508.714 425.5,508.5C 424.731,496.636 421.898,485.303 417,474.5C 414.29,471.814 411.29,469.481 408,467.5C 408.013,461.945 407.013,456.612 405,451.5C 403.442,449.232 401.276,448.066 398.5,448C 396.3,445.766 394.467,443.266 393,440.5C 389.706,437.689 386.706,438.022 384,441.5C 382.601,444.363 381.601,447.363 381,450.5C 379.174,452.074 377.007,452.907 374.5,453C 372.959,454.579 371.792,456.413 371,458.5C 368.618,467.379 366.951,476.379 366,485.5C 362.694,486.14 360.694,488.14 360,491.5C 357.947,499.006 356.614,506.673 356,514.5C 354.644,515.38 353.144,515.714 351.5,515.5C 351.486,504.824 349.652,494.49 346,484.5C 343.86,483.272 342.193,481.605 341,479.5C 340.932,473.006 339.932,466.673 338,460.5C 335.976,456.376 332.643,454.376 328,454.5C 326.621,448.467 324.121,442.967 320.5,438C 318.945,436.711 317.279,436.044 315.5,436C 312.683,438.638 310.35,441.638 308.5,445C 304.768,444.812 301.934,446.312 300,449.5C 297.659,456.359 295.825,463.359 294.5,470.5C 290.565,471.268 288.065,473.601 287,477.5C 285.536,483.411 284.536,489.411 284,495.5C 281.253,498.034 278.587,498.034 276,495.5C 275.667,485.5 275.333,475.5 275,465.5C 272.667,463.167 270.333,460.833 268,458.5C 267.333,452.5 267.333,446.5 268,440.5C 269.399,439.773 270.899,439.273 272.5,439C 273.453,437.045 274.787,435.378 276.5,434C 280.833,433.667 285.167,433.333 289.5,433C 290,432.5 290.5,432 291,431.5C 292.759,380.477 316.259,343.644 361.5,321C 363.698,318.417 365.531,315.584 367,312.5C 368.378,310.787 370.045,309.453 372,308.5C 372.702,299.318 372.536,290.151 371.5,281C 371.818,278.312 372.651,275.812 374,273.5C 376.667,272.167 379.333,270.833 382,269.5C 383.112,264.22 384.612,259.054 386.5,254C 385.756,251.845 384.756,249.845 383.5,248C 383.978,246.697 384.645,245.531 385.5,244.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 821.5,314.5 C 843.037,312.942 863.704,316.442 883.5,325C 890.671,328.416 897.338,332.582 903.5,337.5C 896.135,347.191 888.802,356.857 881.5,366.5C 866.822,355.05 850.155,348.717 831.5,347.5C 824.516,347.663 817.849,349.163 811.5,352C 803.959,357.616 803.625,363.616 810.5,370C 813.089,371.197 815.756,372.197 818.5,373C 834.144,375.774 849.81,378.441 865.5,381C 900.527,388.89 913.027,410.057 903,444.5C 895.34,459.094 883.507,468.594 867.5,473C 828.067,482.815 792.4,475.315 760.5,450.5C 767.854,440.467 775.687,430.8 784,421.5C 796.907,432.536 811.74,439.703 828.5,443C 840.082,444.816 851.082,443.15 861.5,438C 868.598,430.583 867.932,423.916 859.5,418C 855.317,416.204 850.984,414.871 846.5,414C 828.989,411.526 811.656,408.193 794.5,404C 772.723,394.165 763.89,377.331 768,353.5C 772.699,335.8 783.866,324.3 801.5,319C 808.226,317.164 814.893,315.664 821.5,314.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 996.5,316.5 C 1012.18,316.167 1027.85,316.501 1043.5,317.5C 1065.46,369.751 1087.13,422.084 1108.5,474.5C 1093.83,474.667 1079.16,474.5 1064.5,474C 1059.5,461.667 1054.5,449.333 1049.5,437C 1028.83,436.167 1008.16,436.334 987.5,437.5C 982.398,449.643 977.398,461.81 972.5,474C 958.167,474.667 943.833,474.667 929.5,474C 951.977,421.547 974.311,369.047 996.5,316.5 Z M 1018.5,357.5 C 1025,372.987 1031.34,388.653 1037.5,404.5C 1024.85,405.666 1012.18,405.833 999.5,405C 1006.32,389.359 1012.66,373.526 1018.5,357.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 1142.5,316.5 C 1156.17,316.5 1169.83,316.5 1183.5,316.5C 1183.5,369.167 1183.5,421.833 1183.5,474.5C 1169.83,474.5 1156.17,474.5 1142.5,474.5C 1142.5,421.833 1142.5,369.167 1142.5,316.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 1233.5,316.5 C 1246.17,316.333 1258.84,316.5 1271.5,317C 1295.67,346.5 1319.83,376 1344,405.5C 1344.5,375.835 1344.67,346.169 1344.5,316.5C 1357.5,316.5 1370.5,316.5 1383.5,316.5C 1383.5,369.167 1383.5,421.833 1383.5,474.5C 1371.16,474.667 1358.83,474.5 1346.5,474C 1321.55,443.258 1296.71,412.425 1272,381.5C 1271.5,412.498 1271.33,443.498 1271.5,474.5C 1258.83,474.5 1246.17,474.5 1233.5,474.5C 1233.5,421.833 1233.5,369.167 1233.5,316.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 1423.5,316.5 C 1472.5,316.5 1521.5,316.5 1570.5,316.5C 1570.5,328.167 1570.5,339.833 1570.5,351.5C 1552.83,351.5 1535.17,351.5 1517.5,351.5C 1517.5,392.5 1517.5,433.5 1517.5,474.5C 1503.83,474.5 1490.17,474.5 1476.5,474.5C 1476.5,433.5 1476.5,392.5 1476.5,351.5C 1458.83,351.5 1441.17,351.5 1423.5,351.5C 1423.5,339.833 1423.5,328.167 1423.5,316.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 1678.5,316.5 C 1711.87,316.043 1745.2,316.543 1778.5,318C 1804.86,324.355 1818.86,341.022 1820.5,368C 1818.47,396.705 1803.13,413.372 1774.5,418C 1756.17,418.5 1737.84,418.667 1719.5,418.5C 1719.5,437.167 1719.5,455.833 1719.5,474.5C 1705.83,474.5 1692.17,474.5 1678.5,474.5C 1678.5,421.833 1678.5,369.167 1678.5,316.5 Z M 1719.5,350.5 C 1735.56,350.062 1751.56,350.562 1767.5,352C 1778.74,357.365 1781.9,365.865 1777,377.5C 1774.07,381.381 1770.24,383.881 1765.5,385C 1750.17,385.5 1734.84,385.667 1719.5,385.5C 1719.5,373.833 1719.5,362.167 1719.5,350.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 1889.5,316.5 C 1905.18,316.167 1920.85,316.501 1936.5,317.5C 1958.46,369.751 1980.13,422.084 2001.5,474.5C 1986.82,474.833 1972.15,474.499 1957.5,473.5C 1952.4,461.357 1947.4,449.19 1942.5,437C 1921.83,436.167 1901.16,436.334 1880.5,437.5C 1875.4,449.643 1870.4,461.81 1865.5,474C 1851.17,474.667 1836.83,474.667 1822.5,474C 1844.98,421.547 1867.31,369.047 1889.5,316.5 Z M 1911.5,357.5 C 1918.06,372.965 1924.39,388.631 1930.5,404.5C 1918.18,405.499 1905.85,405.832 1893.5,405.5C 1899.3,389.434 1905.3,373.434 1911.5,357.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 2026.5,316.5 C 2040.17,316.5 2053.83,316.5 2067.5,316.5C 2067.04,349.869 2067.54,383.202 2069,416.5C 2074.13,432.153 2084.96,440.153 2101.5,440.5C 2116.84,439.977 2127.34,432.644 2133,418.5C 2134.47,384.549 2134.97,350.549 2134.5,316.5C 2148.17,316.5 2161.83,316.5 2175.5,316.5C 2175.67,350.168 2175.5,383.835 2175,417.5C 2170.39,448.445 2152.89,467.611 2122.5,475C 2099.4,479.891 2077.4,476.891 2056.5,466C 2038.26,453.372 2028.43,435.872 2027,413.5C 2026.5,381.168 2026.33,348.835 2026.5,316.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9faf9\" d=\"M 2222.5,316.5 C 2236.17,316.5 2249.83,316.5 2263.5,316.5C 2263.5,357.5 2263.5,398.5 2263.5,439.5C 2292.17,439.5 2320.83,439.5 2349.5,439.5C 2349.5,451.167 2349.5,462.833 2349.5,474.5C 2307.17,474.5 2264.83,474.5 2222.5,474.5C 2222.5,421.833 2222.5,369.167 2222.5,316.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9f9f9\" d=\"M 275.5,533.5 C 276.873,533.343 278.207,533.51 279.5,534C 289.283,540.782 298.783,547.949 308,555.5C 308.5,574.83 308.667,594.164 308.5,613.5C 300.167,613.5 291.833,613.5 283.5,613.5C 283.5,607.5 283.5,601.5 283.5,595.5C 279.5,595.5 275.5,595.5 271.5,595.5C 271.5,601.5 271.5,607.5 271.5,613.5C 263.167,613.5 254.833,613.5 246.5,613.5C 246.333,593.831 246.5,574.164 247,554.5C 256.683,547.637 266.183,540.637 275.5,533.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9f9f9\" d=\"M 349.5,533.5 C 352.226,533.264 354.559,534.097 356.5,536C 365,542.5 373.5,549 382,555.5C 382.5,574.83 382.667,594.164 382.5,613.5C 374.167,613.5 365.833,613.5 357.5,613.5C 357.5,607.5 357.5,601.5 357.5,595.5C 353.5,595.5 349.5,595.5 345.5,595.5C 345.5,601.5 345.5,607.5 345.5,613.5C 337.167,613.5 328.833,613.5 320.5,613.5C 320.333,594.164 320.5,574.83 321,555.5C 330.4,547.92 339.9,540.587 349.5,533.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9f9f9\" d=\"M 424.5,533.5 C 425.873,533.343 427.207,533.51 428.5,534C 438,540.833 447.5,547.667 457,554.5C 457.5,574.164 457.667,593.831 457.5,613.5C 449.167,613.5 440.833,613.5 432.5,613.5C 432.5,607.5 432.5,601.5 432.5,595.5C 428.5,595.5 424.5,595.5 420.5,595.5C 420.5,601.5 420.5,607.5 420.5,613.5C 412.167,613.5 403.833,613.5 395.5,613.5C 395.333,594.164 395.5,574.83 396,555.5C 405.659,548.268 415.159,540.934 424.5,533.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f7f7f9\" d=\"M 498.5,533.5 C 500.655,533.372 502.655,533.872 504.5,535C 512.886,541.72 521.553,548.053 530.5,554C 531.126,554.75 531.626,555.584 532,556.5C 532.5,575.497 532.667,594.497 532.5,613.5C 523.833,613.5 515.167,613.5 506.5,613.5C 506.5,607.5 506.5,601.5 506.5,595.5C 502.5,595.5 498.5,595.5 494.5,595.5C 494.5,601.5 494.5,607.5 494.5,613.5C 486.167,613.5 477.833,613.5 469.5,613.5C 469.333,594.164 469.5,574.83 470,555.5C 479.659,548.268 489.159,540.934 498.5,533.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 1410.5,554.5 C 1425.37,554.551 1439.37,558.051 1452.5,565C 1455.39,566.938 1458.06,569.105 1460.5,571.5C 1456.24,578.756 1451.24,585.423 1445.5,591.5C 1435.46,583.817 1424.13,579.484 1411.5,578.5C 1406.06,578.684 1401.06,580.184 1396.5,583C 1392.73,589.361 1394.4,593.694 1401.5,596C 1412.79,598.215 1424.13,600.215 1435.5,602C 1460.09,608.756 1468.26,624.256 1460,648.5C 1454.15,659.013 1445.32,665.513 1433.5,668C 1407.24,673.885 1383.9,668.219 1363.5,651C 1368.27,643.894 1373.43,637.061 1379,630.5C 1389.5,639.896 1401.84,645.23 1416,646.5C 1421.85,646.221 1427.35,644.721 1432.5,642C 1437.23,635.087 1435.56,630.087 1427.5,627C 1416.88,624.743 1406.22,622.743 1395.5,621C 1374.76,616.936 1365.6,604.436 1368,583.5C 1370.46,571.701 1377.3,563.534 1388.5,559C 1395.78,556.521 1403.12,555.021 1410.5,554.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 1540.5,554.5 C 1579.72,554.389 1601.72,573.722 1606.5,612.5C 1603.56,645.273 1585.89,664.439 1553.5,670C 1527.91,672.121 1508.08,662.621 1494,641.5C 1479.43,609.581 1486.26,583.414 1514.5,563C 1522.79,558.604 1531.45,555.771 1540.5,554.5 Z M 1543.5,580.5 C 1563.8,581.649 1575.14,592.316 1577.5,612.5C 1573.61,637.559 1559.28,647.392 1534.5,642C 1518.82,633.315 1512.99,620.148 1517,602.5C 1521.72,590.077 1530.55,582.743 1543.5,580.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 760.5,556.5 C 772.505,556.333 784.505,556.5 796.5,557C 805.461,573.754 814.294,590.588 823,607.5C 832.088,590.992 840.921,574.325 849.5,557.5C 861.482,556.501 873.482,556.168 885.5,556.5C 885.5,593.833 885.5,631.167 885.5,668.5C 876.5,668.5 867.5,668.5 858.5,668.5C 858.667,644.498 858.5,620.498 858,596.5C 846.333,617.833 834.667,639.167 823,660.5C 810.492,638.82 798.492,616.82 787,594.5C 786.5,619.164 786.333,643.831 786.5,668.5C 777.833,668.5 769.167,668.5 760.5,668.5C 760.5,631.167 760.5,593.833 760.5,556.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 918.5,556.5 C 928.167,556.5 937.833,556.5 947.5,556.5C 947.5,593.833 947.5,631.167 947.5,668.5C 937.833,668.5 928.167,668.5 918.5,668.5C 918.5,631.167 918.5,593.833 918.5,556.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 980.5,556.5 C 989.506,556.334 998.506,556.5 1007.5,557C 1023.67,577.833 1039.83,598.667 1056,619.5C 1056.5,598.503 1056.67,577.503 1056.5,556.5C 1065.5,556.5 1074.5,556.5 1083.5,556.5C 1083.5,593.833 1083.5,631.167 1083.5,668.5C 1074.83,668.666 1066.16,668.5 1057.5,668C 1041,646.833 1024.5,625.667 1008,604.5C 1007.5,625.831 1007.33,647.164 1007.5,668.5C 998.5,668.5 989.5,668.5 980.5,668.5C 980.5,631.167 980.5,593.833 980.5,556.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 1116.5,556.5 C 1125.51,556.334 1134.51,556.5 1143.5,557C 1159.67,577.833 1175.83,598.667 1192,619.5C 1192.5,598.503 1192.67,577.503 1192.5,556.5C 1201.5,556.5 1210.5,556.5 1219.5,556.5C 1219.5,593.833 1219.5,631.167 1219.5,668.5C 1210.83,668.666 1202.16,668.5 1193.5,668C 1177.12,646.743 1160.62,625.576 1144,604.5C 1143.5,625.831 1143.33,647.164 1143.5,668.5C 1134.5,668.5 1125.5,668.5 1116.5,668.5C 1116.5,631.167 1116.5,593.833 1116.5,556.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 1252.5,556.5 C 1281.83,556.5 1311.17,556.5 1340.5,556.5C 1340.5,564.833 1340.5,573.167 1340.5,581.5C 1320.5,581.5 1300.5,581.5 1280.5,581.5C 1280.5,587.833 1280.5,594.167 1280.5,600.5C 1293.83,600.5 1307.17,600.5 1320.5,600.5C 1320.5,608.167 1320.5,615.833 1320.5,623.5C 1307.17,623.5 1293.83,623.5 1280.5,623.5C 1280.5,630.167 1280.5,636.833 1280.5,643.5C 1300.83,643.5 1321.17,643.5 1341.5,643.5C 1341.5,651.833 1341.5,660.167 1341.5,668.5C 1311.83,668.5 1282.17,668.5 1252.5,668.5C 1252.5,631.167 1252.5,593.833 1252.5,556.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 1622.5,556.5 C 1656.17,556.5 1689.83,556.5 1723.5,556.5C 1723.5,564.833 1723.5,573.167 1723.5,581.5C 1711.5,581.5 1699.5,581.5 1687.5,581.5C 1687.5,610.5 1687.5,639.5 1687.5,668.5C 1678.17,668.5 1668.83,668.5 1659.5,668.5C 1659.5,639.5 1659.5,610.5 1659.5,581.5C 1647.17,581.5 1634.83,581.5 1622.5,581.5C 1622.5,573.167 1622.5,564.833 1622.5,556.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#ecaf2a\" d=\"M 1763.5,556.5 C 1774.17,556.333 1784.84,556.5 1795.5,557C 1810.79,593.696 1825.79,630.529 1840.5,667.5C 1830.19,668.499 1819.85,668.832 1809.5,668.5C 1806.3,659.574 1803.3,650.574 1800.5,641.5C 1786.15,641.167 1771.82,641.501 1757.5,642.5C 1754.17,650.833 1750.83,659.167 1747.5,667.5C 1737.52,668.666 1727.52,668.832 1717.5,668C 1732.98,630.88 1748.31,593.713 1763.5,556.5 Z M 1778.5,585.5 C 1783,596.321 1787.34,607.321 1791.5,618.5C 1783.17,619.833 1774.83,619.833 1766.5,618.5C 1770.9,607.618 1774.9,596.618 1778.5,585.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#f9f9f9\" d=\"M 523.5,647.5 C 526.167,647.5 528.833,647.5 531.5,647.5C 531.5,678.167 531.5,708.833 531.5,739.5C 436.5,739.5 341.5,739.5 246.5,739.5C 246.5,708.5 246.5,677.5 246.5,646.5C 259.958,647.063 271.291,652.23 280.5,662C 287.848,665.835 295.515,666.502 303.5,664C 309.444,660.389 315.111,656.389 320.5,652C 332.817,645.454 345.484,644.788 358.5,650C 365.516,654.174 372.183,658.841 378.5,664C 385.152,665.951 391.819,665.951 398.5,664C 405.996,658.751 413.663,653.751 421.5,649C 432.295,645.476 442.962,645.809 453.5,650C 461.167,655 468.833,660 476.5,665C 481.5,665.667 486.5,665.667 491.5,665C 498.772,660.726 505.772,656.059 512.5,651C 516.021,649.326 519.687,648.16 523.5,647.5 Z\"/></g>\n<g><path style=\"opacity:1\" fill=\"#91b0e7\" d=\"M 523.5,647.5 C 526.287,646.523 529.287,646.19 532.5,646.5C 532.831,677.671 532.498,708.671 531.5,739.5C 531.5,708.833 531.5,678.167 531.5,647.5C 528.833,647.5 526.167,647.5 523.5,647.5 Z\"/></g>\n</svg>\n";
+    watermarkSvgEl=new DOMParser().parseFromString(_svgStr,'image/svg+xml').documentElement;
+  }catch(e){}
 })();
 
 // Per-photo overlay state keyed by filename:
@@ -1123,6 +1140,7 @@ let dimMode     = false;   // when true, drawn lines get a dimension label
 let arrowStyle  = 'none';    // 'none'|'end'|'start'|'both'
 let arrowSize   = 82;        // arrowhead length in px
 let arrowWidth  = 25;        // arrowhead width (base) in px
+let arrowAngle  = 15;        // arrowhead half-angle in degrees
 // strokes[filename] = [ {type,color,width,dash,points:[{x,y}]} ]
 let strokes     = {};
 let currentStroke = null;    // stroke being drawn
@@ -1253,6 +1271,45 @@ function loadFiles(files){
     };
     reader.readAsDataURL(file);
   });
+}
+
+// ── Generic ZIP image extractor used by all ZIP-load paths ────────────
+async function extractImagesFromZip(zipFile){
+  const JSZip=await loadJSZip();
+  const zip=await JSZip.loadAsync(zipFile);
+  const IMAGE_EXTS=/\.(jpe?g|png|gif|webp|heic|heif|tiff?)$/i;
+  const entries=Object.values(zip.files).filter(f=>!f.dir&&IMAGE_EXTS.test(f.name));
+  if(!entries.length) return null;
+  const files=await Promise.all(entries.map(async entry=>{
+    const blob=await entry.async('blob');
+    const shortName=entry.name.replace(/.*[/\\]/,'');
+    const mime=shortName.match(/\.png$/i)?'image/png':shortName.match(/\.(gif)$/i)?'image/gif':'image/jpeg';
+    return new File([blob],shortName,{type:mime});
+  }));
+  return files;
+}
+
+// Batch Manager Tab 1 — populate slide list from ZIP then let user click "Load Slides"
+async function importSlidesFromZip(zipFile){
+  let files;
+  try{ files=await extractImagesFromZip(zipFile); }
+  catch(e){ alert('Could not read ZIP file.'); return; }
+  if(!files){ alert('No image files found inside the ZIP.'); return; }
+  batchSlideFiles=sortFilesByName(files);
+  renderBatchSlideList();
+  document.getElementById('batchStatus1').textContent=`${files.length} image(s) loaded from ZIP — click "Load Slides" to continue.`;
+}
+
+// Batch Manager Tab 2 — load ONLY close-up images (filename contains "Cls") from ZIP
+async function importCloseupsFromZip(zipFile){
+  let files;
+  try{ files=await extractImagesFromZip(zipFile); }
+  catch(e){ alert('Could not read ZIP file.'); return; }
+  if(!files){ alert('No image files found inside the ZIP.'); return; }
+  // Keep only files whose name contains "Cls" (e.g. TieF_Cls_Plss193_20260422.jpg)
+  const clsFiles=files.filter(f=>/Cls/i.test(f.name.replace(/\.[^.]+$/,'')));
+  if(!clsFiles.length){ alert('No close-up images (Cls) found in the ZIP.'); return; }
+  loadTieCloseupQueue(sortFilesByName(clsFiles));
 }
 
 function defaultLabelPos(w,h){
@@ -2090,25 +2147,31 @@ function drawStroke(tCtx,s){
     const p1End=isCirc ? {x: p1.x - Math.cos(angle)*circRadius, y: p1.y - Math.sin(angle)*circRadius} : p1;
 
     // ── Draw line with gap in the middle ──────────────────────────
+    const _isArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
+    const _atEnd=s.arrow==='end'||s.arrow==='both';
+    const _atStart=s.arrow==='start'||s.arrow==='both';
+    const cosA=Math.cos(angle), sinA=Math.sin(angle);
+    // Stop line at arrowhead base so the filled triangle fully covers the line end
+    const _sbDist=_isArr?_ds:0;
+    const p0draw=(_isArr&&_atStart)?{x:p0Start.x+_sbDist*cosA,y:p0Start.y+_sbDist*sinA}:p0Start;
+    const p1draw=(_isArr&&_atEnd  )?{x:p1End.x  -_sbDist*cosA,y:p1End.y  -_sbDist*sinA}:p1End;
+
     tCtx.save();
     tCtx.strokeStyle=col; tCtx.lineWidth=lw2;
-    tCtx.lineCap='round'; tCtx.lineJoin='round';
+    tCtx.lineCap=_isArr?'butt':'round'; tCtx.lineJoin='round';
     tCtx.setLineDash(getDashArray(s.dash,lw2));
     tCtx.shadowColor='rgba(0,0,0,.5)'; tCtx.shadowBlur=4;
 
-    // Left segment: from p0 to midpoint - halfGap
     if(lineLen > gap*1.1){
-      // Left half
-      const lEndX=midX - Math.cos(angle)*halfGap;
-      const lEndY=midY - Math.sin(angle)*halfGap;
-      tCtx.beginPath(); tCtx.moveTo(p0Start.x,p0Start.y); tCtx.lineTo(lEndX,lEndY); tCtx.stroke();
-      // Right half
-      const rStX=midX + Math.cos(angle)*halfGap;
-      const rStY=midY + Math.sin(angle)*halfGap;
-      tCtx.beginPath(); tCtx.moveTo(rStX,rStY); tCtx.lineTo(p1End.x,p1End.y); tCtx.stroke();
+      const lEndX=midX - cosA*halfGap, lEndY=midY - sinA*halfGap;
+      const rStX =midX + cosA*halfGap, rStY =midY + sinA*halfGap;
+      const leftOk =(lEndX-p0draw.x)*cosA+(lEndY-p0draw.y)*sinA>1;
+      const rightOk=(p1draw.x-rStX )*cosA+(p1draw.y-rStY )*sinA>1;
+      if(leftOk ){ tCtx.beginPath(); tCtx.moveTo(p0draw.x,p0draw.y); tCtx.lineTo(lEndX,lEndY); tCtx.stroke(); }
+      if(rightOk){ tCtx.beginPath(); tCtx.moveTo(rStX,rStY); tCtx.lineTo(p1draw.x,p1draw.y); tCtx.stroke(); }
     } else {
-      // Line too short for gap — draw full line
-      tCtx.beginPath(); tCtx.moveTo(p0Start.x,p0Start.y); tCtx.lineTo(p1End.x,p1End.y); tCtx.stroke();
+      const bodyOk=(p1draw.x-p0draw.x)*cosA+(p1draw.y-p0draw.y)*sinA>1;
+      if(bodyOk){ tCtx.beginPath(); tCtx.moveTo(p0draw.x,p0draw.y); tCtx.lineTo(p1draw.x,p1draw.y); tCtx.stroke(); }
     }
     tCtx.restore();
 
@@ -2719,7 +2782,7 @@ function onMouseDown(e){
   ensureStrokes(p);
   const{x,y}=canvasXY(e);
   if(activeTool==='pen'){
-    currentStroke={type:'pen',color:penColor,width:parseInt(document.getElementById('penW').value)||3,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,points:[{x,y}]};
+    currentStroke={type:'pen',color:penColor,width:parseInt(document.getElementById('penW').value)||3,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,arrowAngle:arrowAngle,points:[{x,y}]};
   } else if(activeTool==='line'){
     lineStart={x,y};
   } else if(activeTool==='spline'){
@@ -2765,10 +2828,10 @@ function onMouseUp(e){
       // Dim mode: push only a 'dim' stroke which draws the broken line + label
       const dv=(document.getElementById('dimValue')?.value||'').trim();
       const df=parseInt(document.getElementById('dimFontSize')?.value)||80;
-      strokes[p.file.name].push({type:'dim',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,points:[lineStart,{x,y}],dimVal:dv,dimFs:df});
+      strokes[p.file.name].push({type:'dim',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,arrowAngle:arrowAngle,points:[lineStart,{x,y}],dimVal:dv,dimFs:df});
     } else {
       // Normal mode: push a standard line stroke
-      strokes[p.file.name].push({type:'line',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,points:[lineStart,{x,y}]});
+      strokes[p.file.name].push({type:'line',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,arrowAngle:arrowAngle,points:[lineStart,{x,y}]});
     }
     lineStart=null;
     refreshCanvas();
@@ -2783,7 +2846,7 @@ function onDblClick(e){
     const pts=[...splinePoints,{x,y}];
     if(pts.length>=2){
       const lw=parseInt(document.getElementById('penW').value)||3;
-      strokes[p.file.name].push({type:'spline',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,points:pts});
+      strokes[p.file.name].push({type:'spline',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,arrowAngle:arrowAngle,points:pts});
     }
     splinePoints=[];
     refreshCanvas();
@@ -3492,7 +3555,7 @@ function buildExportFilename(p,photoIdx){
   const label=slideLabel(photoIdx);
   const seq=slideSeq(photoIdx);
   const parts=[seq+'_'+label];
-  if(cityId) parts.push('Plss'+cityId);
+  if(cityId) parts.push((parseInt(cityId,10)<=300?'Plss':'MON') + cityId);
   parts.push(dateYMD);
   return parts.join('_')+'.jpg';
 }
@@ -3500,7 +3563,558 @@ function buildZipFilename(){
   const cityId=document.getElementById('cityId')?.value?.trim()||'';
   const firstPhoto=photos.find(p=>p.date)||photos[0];
   const dateYMD=firstPhoto?dateToYMD(firstPhoto.date):dateToYMD(null);
-  return cityId?`Plss${cityId}_${dateYMD}.zip`:`${dateYMD}.zip`;
+  return cityId ? `${parseInt(cityId,10)<=300?'Plss':'MON'}${cityId}_${dateYMD}.zip` : `${dateYMD}.zip`;
+}
+
+function buildPdfFilename(){
+  const cityId=document.getElementById('cityId')?.value?.trim()||'';
+  const firstPhoto=photos.find(p=>p.date)||photos[0];
+  const d=firstPhoto?.date ? new Date(firstPhoto.date) : new Date();
+  const yyyy=d.getFullYear();
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const cid=cityId.padStart(4,'0');
+  return `${cid}-P${yyyy}_${mm}-ALL.pdf`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  PDF EXPORT  (hybrid vector: photo as JPEG raster, labels/lines as native jsPDF vector)
+// ══════════════════════════════════════════════════════════
+async function exportAllPdf(){
+  if(!photos.length){ alert('No photos to export.'); return; }
+  const btn=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Export PDF'));
+  const origText=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Building PDF…'; }
+  try{
+    // Lazily load jsPDF if the CDN script hasn't executed yet
+    if(typeof window.jspdf==='undefined'){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload=resolve; s.onerror=()=>reject(new Error('Failed to load jsPDF'));
+        document.head.appendChild(s);
+      });
+    }
+    const {jsPDF,GState}=window.jspdf;
+
+    // ── Helper: parse CSS colour string → {r,g,b,a} ────────────────────────
+    function parseColor(col){
+      if(!col) return {r:255,g:255,b:0,a:1};
+      const m=col.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+      if(m) return {r:+m[1],g:+m[2],b:+m[3],a:m[4]!==undefined?+m[4]:1};
+      // hex
+      const hex=col.replace('#','');
+      if(hex.length===3) return {r:parseInt(hex[0]+hex[0],16),g:parseInt(hex[1]+hex[1],16),b:parseInt(hex[2]+hex[2],16),a:1};
+      if(hex.length===6) return {r:parseInt(hex.slice(0,2),16),g:parseInt(hex.slice(2,4),16),b:parseInt(hex.slice(4,6),16),a:1};
+      return {r:255,g:255,b:0,a:1};
+    }
+
+    // ── Helper: measure text width using an offscreen canvas ───────────────
+    const _mc=document.createElement('canvas').getContext('2d');
+    function measureW(text,size,bold){
+      _mc.font=`${bold?'bold ':''}${size}px Helvetica,Arial,sans-serif`;
+      return _mc.measureText(text).width;
+    }
+
+    // ── Helper: wrap text to jsPDF (using canvas measurement) ──────────────
+    function wrapPdf(text,size,bold,maxW){
+      const lines=[];
+      const hardLines=text.split('\n');
+      hardLines.forEach(hl=>{
+        if(!hl){lines.push('');return;}
+        const words=hl.split(' ');
+        let cur='';
+        words.forEach(w=>{
+          const test=cur?cur+' '+w:w;
+          if(measureW(test,size,bold)<=maxW){cur=test;}
+          else{if(cur) lines.push(cur); cur=w;}
+        });
+        if(cur) lines.push(cur);
+      });
+      return lines;
+    }
+
+    // ── Helper: draw one label block as native jsPDF vector calls ──────────
+    // posObj = {x,y,boxW,boxH}, text = string, size = px, col = css color string,
+    // bold = bool, align = 'left'|'center'|'right'
+    function drawPdfLabel(doc,posObj,text,size,col,bold,align){
+      if(!text) return;
+      const displayText=fontAllCaps?text.toUpperCase():text;
+      const pad=textPadding;
+      const lhMult=lineHeightMult;
+      const lineH=size*lhMult;
+      const hasPara=posObj.boxW>0||displayText.includes('\n');
+      let lines,boxW,boxH;
+      if(hasPara){
+        const innerW=posObj.boxW>0?posObj.boxW-pad*2:400;
+        lines=wrapPdf(displayText,size,bold,innerW);
+        boxW=posObj.boxW>0?posObj.boxW:innerW+pad*2;
+        boxH=posObj.boxH>0?posObj.boxH:lines.length*lineH+pad*2;
+      } else {
+        const w=measureW(displayText,size,bold);
+        boxW=w+pad*2;
+        boxH=lineH+pad*2;
+        lines=[displayText];
+      }
+
+      // Background rect (optional)
+      if(textBgEnabled&&displayText){
+        const bg=parseColor(textBgColor);
+        doc.saveGraphicsState();
+        doc.setGState(new GState({opacity:bg.a}));
+        doc.setFillColor(bg.r,bg.g,bg.b);
+        doc.rect(posObj.x,posObj.y,boxW,boxH,'F');
+        doc.restoreGraphicsState();
+      }
+
+      // Text outline pass (simulate canvas stroke with a darker rect or offset draws)
+      const tc=parseColor(col||textColor);
+      // Outline: if fontOutline, draw dark text offset by outline width first
+      const outW=parseInt(document.getElementById('outlineW')?.value)||4;
+      const oc2=parseColor(outlineColor||'#000000');
+
+      lines.forEach((line,li)=>{
+        if(!line&&li>0&&li<lines.length-1) return;
+        // Canvas draws text at: y = pos.y + pad + li*lineH + size*0.08, textBaseline='top'
+        // jsPDF text() y is the BASELINE: baseline ≈ top + size*0.8
+        const canvasTopY=posObj.y+pad+li*lineH+size*0.08;
+        const baselineY=canvasTopY+size*0.8;
+
+        let textX;
+        if(align==='center')      textX=posObj.x+boxW/2;
+        else if(align==='right')  textX=posObj.x+boxW-pad;
+        else                      textX=posObj.x+pad;
+
+        const jsPdfAlign=align==='center'?'center':align==='right'?'right':'left';
+
+        doc.setFontSize(size * 0.8);
+        doc.setFont('Helvetica',bold?'bold':'normal');
+
+        if(fontOutline){
+          // True vector stroke outline — matches canvas strokeText
+          doc.setDrawColor(oc2.r,oc2.g,oc2.b);
+          doc.setLineWidth(outW);
+          doc.setLineJoin('round');
+          doc.text(line,textX,baselineY,{align:jsPdfAlign,renderingMode:'stroke'});
+        }
+
+        // Main fill text on top
+        doc.setTextColor(tc.r,tc.g,tc.b);
+        doc.text(line,textX,baselineY,{align:jsPdfAlign,renderingMode:'fill'});
+      });
+    }
+
+    // ── Helper: set jsPDF dash pattern from stroke dash style ─────────────
+    function setPdfDash(doc,dash,lw){
+      if(dash==='dash') doc.setLineDashPattern([lw*4,lw*3],0);
+      else if(dash==='dot') doc.setLineDashPattern([lw,lw*2],0);
+      else doc.setLineDashPattern([],0);
+    }
+
+    // ── Helper: draw a filled triangle (arrowhead) in jsPDF ───────────────
+    function pdfArrowHead(doc,fx,fy,tx,ty,lw,col,sz,halfDeg){
+      const headLen=sz;
+      const halfW=Math.tan((halfDeg||30)*Math.PI/180)*headLen;
+      const angle=Math.atan2(ty-fy,tx-fx);
+      const perpA=angle+Math.PI/2;
+      const bx=tx-headLen*Math.cos(angle), by=ty-headLen*Math.sin(angle);
+      const lx=bx+halfW*Math.cos(perpA), ly=by+halfW*Math.sin(perpA);
+      const rx=bx-halfW*Math.cos(perpA), ry=by-halfW*Math.sin(perpA);
+      doc.saveGraphicsState();
+      doc.setFillColor(col.r,col.g,col.b);
+      doc.setLineDashPattern([],0);
+      // draw filled triangle via lines() closed path
+      doc.lines(
+        [[lx-tx,ly-ty],[rx-lx,ry-ly],[tx-rx,ty-ry]],
+        tx,ty,[1,1],'F',true
+      );
+      doc.restoreGraphicsState();
+    }
+
+    // ── Helper: draw end marker (dot/tick/circ) in jsPDF ──────────────────
+    function pdfEndMarker(doc,fx,fy,tx,ty,lw,col,type,sz,thk){
+      const angle=Math.atan2(ty-fy,tx-fx);
+      doc.saveGraphicsState();
+      doc.setDrawColor(col.r,col.g,col.b);
+      doc.setFillColor(col.r,col.g,col.b);
+      doc.setLineWidth(thk);
+      doc.setLineDashPattern([],0);
+      if(type==='dot'){
+        doc.circle(tx,ty,sz/2,'F');
+      } else if(type==='tick'){
+        const half=sz/2, perpA=angle+Math.PI/2;
+        doc.line(tx+Math.cos(perpA)*half,ty+Math.sin(perpA)*half,
+                 tx-Math.cos(perpA)*half,ty-Math.sin(perpA)*half);
+      } else if(type==='circ'){
+        doc.circle(tx,ty,sz/2,'S');
+      }
+      doc.restoreGraphicsState();
+    }
+
+    // ── Helper: draw strokes as native jsPDF vector graphics ──────────────
+    function drawPdfStrokes(doc,fname,photoW){
+      const sl=strokes[fname];
+      if(!sl||!sl.length) return;
+      sl.forEach(s=>{
+        if(!s.points||s.points.length<2) return;
+        const sc=parseColor(s.color||'#ffff00');
+        const lw=s.width||11;
+        const pts=s.points;
+        const n=pts.length;
+
+        if(s.type==='dim'){
+          // ── Dimension line: gapped line + text label + optional end markers ──
+          const p0=pts[0], p1=pts[n-1];
+          const fs=s.dimFs||80;
+          const label=` ${s.dimVal||''}`;
+          // Measure label width via offscreen canvas
+          const _mc2=document.createElement('canvas').getContext('2d');
+          _mc2.font=`bold ${fs}px Helvetica,Arial,sans-serif`;
+          const labelW=_mc2.measureText(label).width;
+          const gap=labelW+fs*0.5;
+          const midX=(p0.x+p1.x)/2, midY=(p0.y+p1.y)/2;
+          const angle=Math.atan2(p1.y-p0.y,p1.x-p0.x);
+          const lineLen=Math.hypot(p1.x-p0.x,p1.y-p0.y);
+          const halfGap=gap/2;
+          const _ds=s.arrowSize||arrowSize||82;
+          const isCircArrow=s.arrow==='circ'||s.arrow==='circboth';
+          const circRadius=isCircArrow?_ds/2:0;
+          const p0s=isCircArrow?{x:p0.x+Math.cos(angle)*circRadius,y:p0.y+Math.sin(angle)*circRadius}:p0;
+          const p1e=isCircArrow?{x:p1.x-Math.cos(angle)*circRadius,y:p1.y-Math.sin(angle)*circRadius}:p1;
+
+          const _dimIsArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
+          const _dimAtEnd=s.arrow==='end'||s.arrow==='both';
+          const _dimAtStart=s.arrow==='start'||s.arrow==='both';
+
+          // Stop line body at the arrowhead BASE (= full arrowhead length back from tip)
+          // so the filled triangle fully covers the line end — matches canvas setbackDist=aLen.
+          // Guards prevent drawing backwards segments when arrowhead exceeds half-segment length.
+          const _arrowSB=_dimIsArr ? _ds : 0;
+          const cosA=Math.cos(angle), sinA=Math.sin(angle);
+          const p0draw=(_dimIsArr&&_dimAtStart)?{x:p0s.x+_arrowSB*cosA,y:p0s.y+_arrowSB*sinA}:p0s;
+          const p1draw=(_dimIsArr&&_dimAtEnd  )?{x:p1e.x-_arrowSB*cosA,y:p1e.y-_arrowSB*sinA}:p1e;
+
+          doc.saveGraphicsState();
+          doc.setDrawColor(sc.r,sc.g,sc.b);
+          doc.setLineWidth(lw);
+          doc.setLineCap(_dimIsArr?'butt':'round');
+          doc.setLineJoin('round');
+          setPdfDash(doc,s.dash,lw);
+          if(lineLen>gap*1.1){
+            const lEndX=midX-cosA*halfGap, lEndY=midY-sinA*halfGap;
+            const rStX=midX+cosA*halfGap, rStY=midY+sinA*halfGap;
+            // dot-product sign check: only draw if the segment runs toward the label gap
+            const leftOk =(lEndX-p0draw.x)*cosA+(lEndY-p0draw.y)*sinA>1;
+            const rightOk=(p1draw.x-rStX)*cosA+(p1draw.y-rStY)*sinA>1;
+            if(leftOk)  doc.line(p0draw.x,p0draw.y,lEndX,lEndY);
+            if(rightOk) doc.line(rStX,rStY,p1draw.x,p1draw.y);
+          } else {
+            const bodyOk=(p1draw.x-p0draw.x)*cosA+(p1draw.y-p0draw.y)*sinA>1;
+            if(bodyOk) doc.line(p0draw.x,p0draw.y,p1draw.x,p1draw.y);
+          }
+          doc.restoreGraphicsState();
+
+          // End markers / arrowheads
+          if(s.arrow&&s.arrow!=='none'){
+            const _thk=s.arrowWidth||arrowWidth||25;
+            const isDot=s.arrow==='dot'||s.arrow==='dotboth';
+            const isTick=s.arrow==='tick'||s.arrow==='tickboth';
+            const isCircM=s.arrow==='circ'||s.arrow==='circboth';
+            const _atEnd=s.arrow==='end'||s.arrow==='both'||s.arrow==='dot'||s.arrow==='tick'||s.arrow==='circ'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
+            const _atStart=s.arrow==='start'||s.arrow==='both'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
+            if(_atEnd){
+              if(_dimIsArr) pdfArrowHead(doc,p0.x,p0.y,p1.x,p1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
+              else if(isDot||isTick||isCircM) pdfEndMarker(doc,p0.x,p0.y,p1.x,p1.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
+            }
+            if(_atStart){
+              if(_dimIsArr) pdfArrowHead(doc,p1.x,p1.y,p0.x,p0.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
+              else if(isDot||isTick||isCircM) pdfEndMarker(doc,p1.x,p1.y,p0.x,p0.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
+            }
+          }
+
+          // Dim label text (centred on midpoint, horizontal)
+          const outW=parseInt(document.getElementById('outlineW')?.value)||4;
+          const oc2=parseColor(outlineColor||'#000000');
+          doc.saveGraphicsState();
+          doc.setFont('Helvetica','bold');
+          doc.setFontSize(fs * 0.8);
+          if(fontOutline){
+            doc.setDrawColor(oc2.r,oc2.g,oc2.b);
+            doc.setLineWidth(outW);
+            doc.setLineJoin('round');
+            doc.text(label,midX,midY+fs*0.35,{align:'center',renderingMode:'stroke'});
+          }
+          doc.setTextColor(sc.r,sc.g,sc.b);
+          doc.text(label,midX,midY+fs*0.35,{align:'center',renderingMode:'fill'});
+          doc.restoreGraphicsState();
+
+        } else if(s.type==='spline'){
+          // ── Spline: quadratic bezier midpoint-smoothing (matches canvas rendering) ──
+          doc.saveGraphicsState();
+          doc.setDrawColor(sc.r,sc.g,sc.b);
+          doc.setLineWidth(lw);
+          doc.setLineCap('round');
+          doc.setLineJoin('round');
+          setPdfDash(doc,s.dash,lw);
+          if(n===2){
+            doc.line(pts[0].x,pts[0].y,pts[1].x,pts[1].y);
+          } else {
+            // Build cubic-bezier segments for doc.lines() from quadratic midpoint smoothing.
+            // Each canvas quadraticCurveTo(cpx,cpy, ex,ey) from (sx,sy) is equivalent to
+            // a cubic bezier with:
+            //   cp1 = sx + 2/3*(cpx-sx), cp2 = ex + 2/3*(cpx-ex)
+            // doc.lines() takes relative coords: [cp1dx,cp1dy, cp2dx,cp2dy, dx,dy]
+            const segments=[];
+            let curX=pts[0].x, curY=pts[0].y;
+            for(let i=0;i<n-1;i++){
+              const isLast=i===n-2;
+              const cpx=pts[i].x, cpy=pts[i].y;
+              const ex=isLast?pts[n-1].x:(pts[i].x+pts[i+1].x)/2;
+              const ey=isLast?pts[n-1].y:(pts[i].y+pts[i+1].y)/2;
+              // Convert quadratic to cubic (relative to curX,curY)
+              const c1x=curX+2/3*(cpx-curX), c1y=curY+2/3*(cpy-curY);
+              const c2x=ex  +2/3*(cpx-ex),   c2y=ey  +2/3*(cpy-ey);
+              segments.push([c1x-curX,c1y-curY, c2x-curX,c2y-curY, ex-curX,ey-curY]);
+              curX=ex; curY=ey;
+            }
+            doc.lines(segments,pts[0].x,pts[0].y,[1,1],'S',false);
+          }
+          doc.restoreGraphicsState();
+
+        } else {
+          // ── line / freehand / default: polyline ──────────────────────────
+          doc.saveGraphicsState();
+          doc.setDrawColor(sc.r,sc.g,sc.b);
+          doc.setLineWidth(lw);
+          doc.setLineCap('round');
+          doc.setLineJoin('round');
+          setPdfDash(doc,s.dash,lw);
+          for(let j=1;j<n;j++){
+            doc.line(pts[j-1].x,pts[j-1].y,pts[j].x,pts[j].y);
+          }
+          // Arrowheads for line type
+          if((s.type==='line')&&s.arrow&&s.arrow!=='none'){
+            const _ds=s.arrowSize||arrowSize||82, _thk=s.arrowWidth||arrowWidth||25;
+            const isArr=s.arrow==='end'||s.arrow==='start'||s.arrow==='both';
+            const isDot=s.arrow==='dot'||s.arrow==='dotboth';
+            const isTick=s.arrow==='tick'||s.arrow==='tickboth';
+            const isCircM=s.arrow==='circ'||s.arrow==='circboth';
+            const atEnd=s.arrow==='end'||s.arrow==='both'||s.arrow==='dot'||s.arrow==='tick'||s.arrow==='circ'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
+            const atStart=s.arrow==='start'||s.arrow==='both'||s.arrow==='dotboth'||s.arrow==='tickboth'||s.arrow==='circboth';
+            const ep0=pts[n-2], ep1=pts[n-1];
+            const sp0=pts[1],   sp1=pts[0];
+            if(atEnd){
+              if(isArr) pdfArrowHead(doc,ep0.x,ep0.y,ep1.x,ep1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
+              else if(isDot||isTick||isCircM) pdfEndMarker(doc,ep0.x,ep0.y,ep1.x,ep1.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
+            }
+            if(atStart){
+              if(isArr) pdfArrowHead(doc,sp0.x,sp0.y,sp1.x,sp1.y,lw,sc,_ds,s.arrowAngle||arrowAngle||15);
+              else if(isDot||isTick||isCircM) pdfEndMarker(doc,sp0.x,sp0.y,sp1.x,sp1.y,lw,sc,isCircM?'circ':isDot?'dot':'tick',_ds,_thk);
+            }
+          }
+          doc.restoreGraphicsState();
+        }
+      });
+    }
+
+    // ── Helper: render circle overlay raster image then vector leader/anchor ─
+    function drawPdfOverlay(doc,p,bakedImg,st,photoW,photoH){
+      if(!bakedImg||!st||!p.img) return;
+      const{cx,cy,r,ax,ay,cp1x,cp1y,cp2x,cp2y}=st;
+      const lw=(st.leaderW!==undefined)?st.leaderW:15;
+      const lc=parseColor(st.leaderColor||'#ffff00');
+      const anchorSz=(st.anchorSz!==undefined)?st.anchorSz:5;
+      const anchorR=st.anchorSz?Math.round(photoW*anchorSz/100):Math.round(photoW*0.04);
+      const pinLW=(st.anchorLW!==undefined)?st.anchorLW:15;
+
+      // 1. Raster circle image (cropped circle with baked border) — embed as PNG
+      //    The bakedImg is a square 512×512 canvas covering [cx-r, cy-r, 2r, 2r]
+      const imgData=bakedImg.src; // HTMLImageElement.src is a data URL or object URL
+      doc.addImage(imgData,'PNG',cx-r,cy-r,r*2,r*2);
+
+      // 2. Vector circle border ring — redrawn on top to be truly vector
+      //    The baked image (512×512) has border drawn at lineWidth=bw*2 at SIZE=512.
+      //    Scale to PDF units: pdfLW = bw*2 * (r/256). Circle radius in PDF = r.
+      const bc=parseColor(st.borderColor||'#ffff00');
+      const bw=(st.borderW!==undefined)?st.borderW:8;
+      const pdfBorderLW=bw;
+      doc.saveGraphicsState();
+      doc.setDrawColor(bc.r,bc.g,bc.b);
+      doc.setLineWidth(pdfBorderLW);
+      doc.setLineDashPattern([],0);
+      doc.circle(cx,cy,r,'S');
+      doc.restoreGraphicsState();
+
+      // 3. Leader bezier curve (vector)
+      // Start: on edge of anchor ring toward cp1
+      const dax=cp1x-ax, day=cp1y-ay, daMag=Math.hypot(dax,day)||1;
+      const sx=ax+(dax/daMag)*anchorR, sy=ay+(day/daMag)*anchorR;
+      // End: on edge of overlay circle toward cp2
+      const dcx=cp2x-cx, dcy=cp2y-cy, dcMag=Math.hypot(dcx,dcy)||1;
+      const ex=cx+(dcx/dcMag)*r, ey=cy+(dcy/dcMag)*r;
+      // Convert cubic bezier to doc.lines() relative segments
+      doc.saveGraphicsState();
+      doc.setDrawColor(lc.r,lc.g,lc.b);
+      doc.setLineWidth(lw);
+      doc.setLineCap('round');
+      doc.setLineJoin('round');
+      doc.setLineDashPattern([],0);
+      doc.lines(
+        [[cp1x-sx,cp1y-sy, cp2x-sx,cp2y-sy, ex-sx,ey-sy]],
+        sx,sy,[1,1],'S',false
+      );
+      doc.restoreGraphicsState();
+
+      // 4. Anchor pin ring (vector open circle)
+      doc.saveGraphicsState();
+      doc.setDrawColor(lc.r,lc.g,lc.b);
+      doc.setLineWidth(pinLW);
+      doc.setLineDashPattern([],0);
+      doc.circle(ax,ay,anchorR,'S');
+      doc.restoreGraphicsState();
+    }
+
+    let doc=null;
+    for(let i=0;i<photos.length;i++){
+      const p=photos[i];
+      if(!p.img) continue;
+      const w=p.img.naturalWidth, h=p.img.naturalHeight;
+
+      // ── Step 1: photo-only canvas → JPEG background ────────────────────
+      const oc=document.createElement('canvas'),ox=oc.getContext('2d');
+      oc.width=w; oc.height=h;
+      ox.drawImage(p.img,0,0);
+      const photoImgData=oc.toDataURL('image/jpeg',0.92);
+
+      // ── Step 2: create PDF page ────────────────────────────────────────
+      if(!doc){
+        doc=new jsPDF({orientation:w>=h?'landscape':'portrait',unit:'px',format:[w,h],compress:true,hotfixes:['px_scaling']});
+        // ── PDF document metadata ──────────────────────────────────────────
+        const _metaCityId  = document.getElementById('cityId')?.value?.trim()||'';
+        const _metaSurvey  = document.getElementById('surveyType')?.value?.trim()||document.getElementById('dbMonTypeVal')?.value?.trim()||'';
+        const _metaMonTag  = _metaCityId ? (parseInt(_metaCityId,10)<=300?'PLSS':'MON')+_metaCityId : '';
+        const _metaFPhoto  = photos.find(ph=>ph.date)||photos[0];
+        const _metaDate    = _metaFPhoto?.date ? new Date(_metaFPhoto.date) : new Date();
+        const _metaDateStr = _metaDate.toISOString().slice(0,10);
+        const _metaTitles  = photos.filter(ph=>ph.title).map(ph=>ph.title).join('; ');
+        const _metaTitle   = [_metaMonTag,_metaSurvey,_metaDateStr].filter(Boolean).join(' – ')||'Field Photo Report';
+        const _metaSubject = [_metaSurvey,_metaTitles].filter(Boolean).join(' | ')||'Survey Photos';
+        const _metaKw      = [_metaMonTag,_metaSurvey,_metaDateStr].filter(Boolean).join(', ');
+        doc.setProperties({
+          title:    _metaTitle,
+          subject:  _metaSubject,
+          author:   'City of Saint Paul',
+          keywords: _metaKw,
+          creator:  'Field Photo Labeler'
+        });
+      } else {
+        doc.addPage([w,h],w>=h?'landscape':'portrait');
+      }
+
+      // ── Step 3: embed photo as raster background ───────────────────────
+      doc.addImage(photoImgData,'JPEG',0,0,w,h);
+
+      // ── Step 4: embed circle overlay images as raster, then vector decorations ──
+      {
+        const fname=p.file.name;
+        if(multiOverlays[fname]&&multiOverlays[fname].length>0){
+          multiOverlays[fname].forEach(ov=>{
+            if(ov.bakedImg&&ov.state) drawPdfOverlay(doc,p,ov.bakedImg,ov.state,w,h);
+          });
+        } else {
+          const baked=circleBakedImg||tieBakedImgs[fname]||null;
+          const st=overlayState[fname];
+          if(baked&&st) drawPdfOverlay(doc,p,baked,st,w,h);
+        }
+      }
+
+      // ── Step 4b: watermark removed from raster overlay (now vector via svg2pdf.js below) ──
+
+      // ── Step 5: replay labels as native jsPDF vector ──────────────────
+      const lpos=p.pos||defaultLabelPos(w,h);
+      const fs_=fontSize;
+      const _eScalePct=fs_/100;
+      const _elfs=key=>{
+        const base=lpos[key]?._baseFontSize||(key==='title'?150:100);
+        return Math.round(base*_eScalePct);
+      };
+
+      // Assemble citymon text (same logic as renderLabelsToCtx)
+      const _cid=document.getElementById('cityId').value.trim();
+      const _mid=document.getElementById('monId').value.trim();
+      const _mtype=document.getElementById('surveyType')?.value?.trim()||document.getElementById('dbMonTypeVal')?.value?.trim()||'';
+      const cmParts=[];
+      if(_cid) cmParts.push('City ID: '+_cid);
+      if(_mid) cmParts.push('County ID: '+_mid);
+      if(_mtype) cmParts.push('Type: '+_mtype);
+      const cm=cmParts.join('\n');
+
+      // title — align center
+      if(p.title&&lpos.title){
+        drawPdfLabel(doc,lpos.title,p.title,_elfs('title'),textColor,true,'center');
+      }
+      // citymon — align left, white text
+      if(cm&&lpos.citymon){
+        drawPdfLabel(doc,lpos.citymon,cm,_elfs('citymon'),'#ffffff',false,'left');
+      }
+      // date — align right, white text
+      if(p.date&&lpos.date){
+        drawPdfLabel(doc,lpos.date,p.date,_elfs('date'),'#ffffff',false,'right');
+      }
+      // desc — align per p.descAlign, default center
+      if(p.desc&&lpos.desc){
+        drawPdfLabel(doc,lpos.desc,p.desc,_elfs('desc'),textColor,true,p.descAlign||'center');
+      }
+      // location — first slide only
+      const _loc=document.getElementById('dbLocationVal')?.value?.trim()||'';
+      const isFirstSlide=photos.length>0&&p===photos[0];
+      if(isFirstSlide&&_loc){
+        const locPos=lpos.location||{x:Math.round(w*0.15),y:Math.round(h*0.80),boxW:Math.round(w*0.7),boxH:0};
+        drawPdfLabel(doc,locPos,_loc,_elfs('location'),textColor,true,'center');
+      }
+
+      // ── Step 6: replay all strokes as native jsPDF vector graphics ────
+      drawPdfStrokes(doc,p.file.name,w);
+
+      // ── Step 7: watermark — decode WATERMARK_SRC base64 SVG → vector PDF ──
+      if(WATERMARK_SRC){
+        const wmAspect = 601.48 / 236.11;
+        const wmW = Math.round(w * watermarkScalePct / 100);
+        const wmH = Math.round(wmW / wmAspect);
+        const wmMargin = Math.round(w * 0.018);
+        const wmX = w - wmW - wmMargin;
+        const wmY = wmMargin;
+        try{
+          // Decode the same base64 SVG the canvas uses
+          const svgText = atob(WATERMARK_SRC.split(',')[1]);
+          const wmEl = new DOMParser().parseFromString(svgText,'image/svg+xml').documentElement;
+          // Attach to live DOM so svg2pdf.js can measure layout
+          const _h=document.createElement('div');
+          _h.style.cssText='position:fixed;left:-9999px;top:-9999px;visibility:hidden';
+          _h.appendChild(wmEl);
+          document.body.appendChild(_h);
+          try{
+            await doc.svg(wmEl,{x:wmX,y:wmY,width:wmW,height:wmH});
+          } finally {
+            document.body.removeChild(_h);
+          }
+        } catch(e){
+          // Fallback to raster if svg2pdf fails
+          doc.saveGraphicsState();
+          doc.setGState(new GState({opacity:watermarkOpacity}));
+          doc.addImage(WATERMARK_SRC,'SVG',wmX,wmY,wmW,wmH);
+          doc.restoreGraphicsState();
+        }
+      }
+
+      if(btn) btn.textContent=`⏳ ${i+1}/${photos.length}…`;
+    }
+    if(doc) doc.save(buildPdfFilename());
+  } catch(err){
+    console.error('PDF export error:',err);
+    alert('PDF export failed: '+err.message);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent=origText; }
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3647,6 +4261,9 @@ function setupBatchModal(){
     batchSlideFiles = sortFilesByName([...e.target.files]);
     renderBatchSlideList();
   });
+  document.getElementById('batchSlidesZipInput').addEventListener('change', e=>{
+    const f=e.target.files[0]; e.target.value=''; if(f) importSlidesFromZip(f);
+  });
   setupBatchDrop('batchSlidesDrop', files=>{
     batchSlideFiles = sortFilesByName(files);
     renderBatchSlideList();
@@ -3655,6 +4272,9 @@ function setupBatchModal(){
   // Option 2: close-ups
   document.getElementById('batchCloseupsInput').addEventListener('change', e=>{
     loadTieCloseupQueue(sortFilesByName([...e.target.files]));
+  });
+  document.getElementById('batchCloseupsZipInput').addEventListener('change', e=>{
+    const f=e.target.files[0]; e.target.value=''; if(f) importCloseupsFromZip(f);
   });
   setupBatchDrop('batchCloseupsDrop', files=>{
     loadTieCloseupQueue(sortFilesByName(files));
@@ -4750,6 +5370,8 @@ function _doOpenEditCrop(file){
   reader.readAsDataURL(file);
 }
 
+</script>
+<script>
 // ══════════════════════════════════════════════════════════
 //  CITY DATABASE  [cityId, countyPtId, location, monType]
 //  6467 rows — auto-paired: City ID ↔ County Point ID
@@ -4758,6 +5380,9 @@ const CITY_DB = [["1","441","Sec Cor Larpenteur Ave & W City Limits (prod), in L
 // Two indexes for O(1) reverse lookup in both directions
 const DB_BY_CITY   = new Map(CITY_DB.map((r,i)=>[r[0],i]));  // cityId   → idx
 const DB_BY_COUNTY = new Map(CITY_DB.map((r,i)=>[r[1],i]));  // countyId → idx
+</script>
+<script>
+
 
 function _applyDbRow(idx){
   if(idx===undefined||idx===null) return;
