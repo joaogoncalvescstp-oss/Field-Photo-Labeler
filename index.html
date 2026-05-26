@@ -400,11 +400,8 @@
       <div style="display:flex;gap:6px;flex-direction:column;margin-top:6px">
         <button class="btn btn-secondary" onclick="openBatchModal()">⚡ Open Batch Manager</button>
         <button class="btn btn-secondary" onclick="openReorderModal()">⇅ Edit Slide &amp; Overlay Order</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('zipImportInput').click()">📥 Import ZIP</button>
       </div>
     </div>
-
-    <input type="file" id="zipImportInput" accept=".zip" style="display:none">
 
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
     <div id="thumbStrip" class="thumb-strip" style="display:none"></div>
@@ -1199,7 +1196,6 @@ function init() {
   buildSwatches('penColorRow', ['#ffff00','#f0a500','#ffffff','#f85149','#3fb950','#58a6ff','#000000'], '#ffff00', c=>{penColor=c;});
 
   document.getElementById('fileInput').addEventListener('change',      e=>loadFiles([...e.target.files]));
-  document.getElementById('zipImportInput').addEventListener('change', e=>{const f=e.target.files[0];e.target.value='';if(f) importFromZip(f);});
   document.getElementById('csvInput').addEventListener('change',       e=>loadCSV(e.target.files[0]));
   document.getElementById('descTxtInput').addEventListener('change',   e=>loadDescTxt(e.target.files[0]));
   document.getElementById('circleImgInput').addEventListener('change', e=>loadCircleSource(e.target.files[0]));
@@ -1293,15 +1289,6 @@ async function extractImagesFromZip(zipFile){
   return files;
 }
 
-// Sidebar "Import ZIP" — simple load all images
-async function importFromZip(zipFile){
-  let files;
-  try{ files=await extractImagesFromZip(zipFile); }
-  catch(e){ alert('Could not read ZIP file. Check your connection and try again.'); return; }
-  if(!files){ alert('No image files found inside the ZIP.'); return; }
-  loadFiles(files);
-}
-
 // Batch Manager Tab 1 — populate slide list from ZIP then let user click "Load Slides"
 async function importSlidesFromZip(zipFile){
   let files;
@@ -1313,13 +1300,16 @@ async function importSlidesFromZip(zipFile){
   document.getElementById('batchStatus1').textContent=`${files.length} image(s) loaded from ZIP — click "Load Slides" to continue.`;
 }
 
-// Batch Manager Tab 2 — load close-ups from ZIP straight into crop queue
+// Batch Manager Tab 2 — load ONLY close-up images (filename contains "Cls") from ZIP
 async function importCloseupsFromZip(zipFile){
   let files;
   try{ files=await extractImagesFromZip(zipFile); }
   catch(e){ alert('Could not read ZIP file.'); return; }
   if(!files){ alert('No image files found inside the ZIP.'); return; }
-  loadTieCloseupQueue(sortFilesByName(files));
+  // Keep only files whose name contains "Cls" (e.g. TieF_Cls_Plss193_20260422.jpg)
+  const clsFiles=files.filter(f=>/Cls/i.test(f.name.replace(/\.[^.]+$/,'')));
+  if(!clsFiles.length){ alert('No close-up images (Cls) found in the ZIP.'); return; }
+  loadTieCloseupQueue(sortFilesByName(clsFiles));
 }
 
 function defaultLabelPos(w,h){
