@@ -398,7 +398,7 @@
   <div class="sidebar">
   <div class="sidebar-scroll">
 
-    <!-- ══ BATCH LOAD ══ --><div class="sidebar-section">
+    <!-- ══ BATCH LOAD ══ --><div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>📦 Batch Load</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <p class="notice">Two-step batch: load all survey slides in order, then load all close-up images and they'll auto-pair as circle overlays on their matching Tie slides.</p>
       <div style="display:flex;gap:6px;flex-direction:column;margin-top:6px">
@@ -409,7 +409,7 @@
 
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
     <div id="thumbStrip" class="thumb-strip" style="display:none"></div>
-<div class="sidebar-section">
+<div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>🏛 Survey Info</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <div class="field-group">
 
@@ -461,7 +461,7 @@
     <input type="file" id="circleImgInput" accept="image/*" style="display:none">
     <input type="file" id="overlayAddInput" accept="image/*" style="display:none">
     <input type="file" id="ovAddCurrentInput" accept="image/*" style="display:none">
-    <input type="file" id="ovEditCropInput" accept="image/*" style="display:none"><div class="sidebar-section">
+    <input type="file" id="ovEditCropInput" accept="image/*" style="display:none"><div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>🔵 Circle Overlay Settings</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <p class="notice">Use the Batch Manager (Option 2) to crop each Tie close-up. Changes apply to the current slide.</p>
 
@@ -548,7 +548,7 @@
     </div>
 
     <!-- ══ DESCRIPTIONS TXT ══ -->
-    <input type="file" id="csvInput" accept=".csv,.txt" style="display:none"><div class="sidebar-section">
+    <input type="file" id="csvInput" accept=".csv,.txt" style="display:none"><div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>📋 Slide Descriptions</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <p class="notice">Each line = one slide's description, in slide order. Import a .txt file or type directly. Drag any description on the canvas to reposition it.</p>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
@@ -559,7 +559,7 @@
       <input type="file" id="descTxtInput" accept=".txt,.csv" style="display:none">
       <div class="desc-editor" id="descEditor" style="margin-top:8px;max-height:260px;overflow-y:auto"></div></div>
     </div>
-<div class="sidebar-section">
+<div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>🔤 Text Style</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <div class="field-group">
         <label>Font Family</label>
@@ -653,7 +653,7 @@
 
     <input type="text" id="descInput" style="display:none" oninput="updateDesc()">
 
-    <!-- ══ PEN / LINE TOOL ══ --><div class="sidebar-section">
+    <!-- ══ PEN / LINE TOOL ══ --><div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>✏️ Pen &amp; Line Tool</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <p class="notice">Draw freehand or straight lines. Right-click a stroke to delete it.</p>
       <div class="pen-toolbar">
@@ -739,7 +739,7 @@
       </div></div>
     </div>
 
-    <!-- ══ WATERMARK ══ --><div class="sidebar-section">
+    <!-- ══ WATERMARK ══ --><div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>🏙 Watermark</span><span class="section-caret">▾</span></div>
       <div class="section-body">      <div style="display:flex;gap:6px;flex-direction:column;margin-top:4px">
         <div style="display:flex;gap:8px;align-items:center">
@@ -759,7 +759,7 @@
           oninput="watermarkScalePct=parseInt(this.value);document.getElementById('wmSzVal').textContent=this.value;document.getElementById('wmSzInput').value=this.value;refreshCanvas()">
       </div></div>
     </div>
-<div class="sidebar-section">
+<div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>💾 Export</span><span class="section-caret">▾</span></div>
       <div class="section-body">
       <!-- Export tip: ZIP is the best way to get all files -->
