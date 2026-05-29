@@ -796,6 +796,10 @@
         <button class="btn btn-secondary btn-sm" onclick="navigate(1)">Next ▶</button>
       </div>
       <div class="tool-group">
+        <button id="undoBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
+        <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
+      </div>
+      <div class="tool-group">
         <label style="font-size:.7rem;color:var(--muted)">↖ Select · dbl-click text to edit · drag box · drag ◢ to resize</label>
       </div>
       <div class="tool-group" id="selectedLabelGroup" style="display:none">
@@ -1143,6 +1147,8 @@ let arrowWidth  = 25;        // arrowhead width (base) in px
 let arrowAngle  = 15;        // arrowhead half-angle in degrees
 // strokes[filename] = [ {type,color,width,dash,points:[{x,y}]} ]
 let strokes     = {};
+const UNDO_LIMIT = 50;
+let _lastDescPushTime = 0;
 let currentStroke = null;    // stroke being drawn
 let splinePoints  = [];      // accumulated clicks for spline tool
 let lineStart     = null;    // for straight-line tool preview
@@ -1226,6 +1232,29 @@ function init() {
   setupCanvasDrag();
   setupCropModalEvents();
   setupBatchModal();
+
+  // Undo/Redo keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    const tag = (document.activeElement||{}).tagName||'';
+    if (tag==='INPUT'||tag==='TEXTAREA'||(document.activeElement||{}).isContentEditable) return;
+    const ctrl = e.ctrlKey||e.metaKey;
+    if (!ctrl) return;
+    if (e.key==='z'||e.key==='Z') {
+      e.preventDefault();
+      e.shiftKey ? redoAction() : undoAction();
+    } else if (e.key==='y'||e.key==='Y') {
+      e.preventDefault(); redoAction();
+    }
+  });
+
+  // Push undo once per slider drag (not on every oninput tick)
+  ['circleBorderW','leaderW','anchorSz','anchorLW'].forEach(id => {
+    const el=document.getElementById(id); if (!el) return;
+    let _sp=false;
+    el.addEventListener('mousedown', ()=>{ if(!_sp){ pushUndo(); _sp=true; } });
+    el.addEventListener('mouseup',   ()=>{ _sp=false; });
+    el.addEventListener('mouseleave',()=>{ _sp=false; });
+  });
 }
 
 function buildSwatches(id, colors, def, onChange) {
@@ -1362,6 +1391,7 @@ function selectPhoto(i){
   ensureOverlayState(p);
   syncSlidersToCurrentPhoto();
   renderThumbs();
+  _updateUndoRedoBtns();
   drawPhoto(p);
 }
 function navigate(dir){selectPhoto(current+dir);}
@@ -1694,6 +1724,7 @@ function drawCropModal(){
 
 function applyCrop(){
   if(!circleSourceImg) return;
+  pushUndo();
   circleCropData={panX:cropPan.x,panY:cropPan.y,zoom:cropZoom};
   closeCropModal();
   if(window._editCropCallback){ window._editCropCallback(); }
@@ -2819,10 +2850,11 @@ function onMouseUp(e){
   ensureStrokes(p);
   const{x,y}=canvasXY(typeof e.clientX!=='undefined'?e:(e.changedTouches?e.changedTouches[0]:e));
   if(activeTool==='pen'&&currentStroke){
-    if(currentStroke.points.length>1) strokes[p.file.name].push(currentStroke);
+    if(currentStroke.points.length>1){ pushUndo(); strokes[p.file.name].push(currentStroke); }
     currentStroke=null;
     refreshCanvas();
   } else if(activeTool==='line'&&lineStart){
+    pushUndo();
     const lw=parseInt(document.getElementById('penW').value)||3;
     if(dimMode){
       // Dim mode: push only a 'dim' stroke which draws the broken line + label
@@ -2845,6 +2877,7 @@ function onDblClick(e){
     const{x,y}=canvasXY(e);
     const pts=[...splinePoints,{x,y}];
     if(pts.length>=2){
+      pushUndo();
       const lw=parseInt(document.getElementById('penW').value)||3;
       strokes[p.file.name].push({type:'spline',color:penColor,width:lw,dash:dashStyle,arrow:arrowStyle,arrowSize:arrowSize,arrowWidth:arrowWidth,arrowAngle:arrowAngle,points:pts});
     }
@@ -2968,6 +3001,7 @@ function clearSelectedLabel(){
 
 // ── Inline editor ──────────────────────────────────────────
 function openInlineEdit(key, p, pos, bW, bH){
+  pushUndo();
   inlineEditKey = key;
   setSelectedLabel(key);
 
@@ -3065,7 +3099,7 @@ function onRightClick(e){
       if(d<minD){minD=d;minI=i;}
     }
   });
-  if(minI>=0){strokes[p.file.name].splice(minI,1);refreshCanvas();}
+  if(minI>=0){pushUndo();strokes[p.file.name].splice(minI,1);refreshCanvas();}
 }
 
 function canvasXY(e){
@@ -3085,10 +3119,12 @@ function onDragStart(e){
     const{delX,delY,editX,editY,btnR:abR,fname:abF,idx:abI}=_ovActionBtns;
     if(Math.hypot(x-delX,y-delY)<=abR+8){
       if(abF!=='legacy'&&multiOverlays[abF]){
+        pushUndo();
         multiOverlays[abF].splice(abI,1);
         activeOvIdx[abF]=Math.max(0,(multiOverlays[abF].length)-1);
         renderOvSwitcher();renderOverlayMgrList();
       } else if(abF==='legacy'&&p.img){
+        pushUndo();
         delete overlayState[p.file.name];
         delete tieBakedImgs[p.file.name];
         delete tieSourceImgs[p.file.name];
@@ -3122,40 +3158,46 @@ function onDragStart(e){
     const hx=cx+r*Math.cos(angle),hy=cy+r*Math.sin(angle);
     const hr=Math.max(12,r*.1);
     if(dist(x,y,hx,hy)<=hr+4){
+      pushUndo();
       dragging='circle-resize'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='nwse-resize'; return;
     }
 
     // control point 2 (near circle end)
     if(dist(x,y,cp2x,cp2y)<=16){
+      pushUndo();
       dragging='cp2'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='move'; return;
     }
     // control point 1 (near anchor end)
     if(dist(x,y,cp1x,cp1y)<=16){
+      pushUndo();
       dragging='cp1'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='move'; return;
     }
 
     // anchor pin resize handle
-    const pinRActual=st.anchorSz?Math.round(p.img.naturalWidth*st.anchorSz/100):getAnchorSizePixels(p.img.naturalWidth);
+    const pinRActual=getAnchorSizePixels(p.img.naturalWidth);
     const pinR=pinRActual+10;
     const angleAnchor=Math.PI*.28;
     const ahx=ax+pinRActual*Math.cos(angleAnchor),ahy=ay+pinRActual*Math.sin(angleAnchor);
     const ahr=Math.max(12,pinRActual*.1);
     if(dist(x,y,ahx,ahy)<=ahr+4){
+      pushUndo();
       dragging='anchor-resize'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='nwse-resize'; return;
     }
 
     // anchor pin — hit radius matches the visual ring size
     if(dist(x,y,ax,ay)<=pinR){
+      pushUndo();
       dragging='anchor'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='crosshair'; return;
     }
 
     // circle body
     if(dist(x,y,cx,cy)<=r){
+      pushUndo();
       dragging='circle-body'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='grabbing'; return;
     }
@@ -3195,12 +3237,14 @@ function onDragStart(e){
     // Resize handle (bottom-right corner, 20×20 hit zone)
     if(x>=pos.x+bW-22&&x<=pos.x+bW+4&&y>=pos.y+bH-22&&y<=pos.y+bH+4){
       setSelectedLabel(c.key);
+      pushUndo();
       dragging='resize-'+c.key; dragStart={x,y}; dragOrigVal={...pos, _bW:bW, _bH:bH};
       canvas.style.cursor='nwse-resize'; return;
     }
     // Box body click/drag
     if(x>=pos.x-4&&x<=pos.x+bW+4&&y>=pos.y-4&&y<=pos.y+bH+4){
       setSelectedLabel(c.key);
+      pushUndo();
       dragging=c.key; dragStart={x,y}; dragOrigVal={...pos};
       canvas.style.cursor='grabbing'; return;
     }
@@ -3229,10 +3273,11 @@ function onDragMove(e){
   } else if(dragging==='circle-resize'){
     if(st) st.r=Math.max(20,dragOrigVal.r+Math.round((dx+dy)*.5));
   } else if(dragging==='anchor-resize'){
-    const newSize=Math.max(1,Math.min(30,Math.round((dragOrigVal.anchorSz||5)+(dx+dy)*.02)));
+    const newSize=Math.max(1,Math.min(30,parseInt(document.getElementById('anchorSz').value||'5')+Math.round((dx+dy)*.02)));
     document.getElementById('anchorSz').value=newSize;
     document.getElementById('anchorSzVal').textContent=newSize;
-    if(st) st.anchorSz=newSize;
+    globalSyncAllRadii();
+    refreshCanvas();
   } else if(dragging==='anchor'){
     if(st){st.ax=dragOrigVal.ax+dx;st.ay=dragOrigVal.ay+dy;st.cp1x=dragOrigVal.cp1x+dx;st.cp1y=dragOrigVal.cp1y+dy;}
   } else if(dragging==='cp1'){
@@ -3254,10 +3299,91 @@ function onDragMove(e){
 function onDragEnd(){dragging=null;canvas.style.cursor='crosshair';}
 
 // ══════════════════════════════════════════════════════════
+//  UNDO / REDO
+// ══════════════════════════════════════════════════════════
+function _snapshotState() {
+  if (current < 0) return null;
+  const p = photos[current]; if (!p) return null;
+  const fname = p.file.name;
+  return {
+    photoIdx: current, fname,
+    title: p.title, desc: p.desc||'', date: p.date||'',
+    pos:          JSON.parse(JSON.stringify(p.pos || {})),
+    overlayState: overlayState[fname] ? JSON.parse(JSON.stringify(overlayState[fname])) : null,
+    multiOverlays: (multiOverlays[fname]||[]).map(ov=>({
+      bakedImg: ov.bakedImg,
+      state: JSON.parse(JSON.stringify(ov.state))
+    })),
+    activeOvIdx: activeOvIdx[fname]||0,
+    strokes: JSON.parse(JSON.stringify(strokes[fname]||[]))
+  };
+}
+
+function _restoreSnapshot(snap) {
+  if (!snap) return;
+  const p = photos[snap.photoIdx];
+  if (!p || p.file.name !== snap.fname) return;
+  p.title = snap.title; p.desc = snap.desc; p.date = snap.date;
+  p.pos = JSON.parse(JSON.stringify(snap.pos));
+  if (snap.overlayState) overlayState[snap.fname] = JSON.parse(JSON.stringify(snap.overlayState));
+  else delete overlayState[snap.fname];
+  multiOverlays[snap.fname] = snap.multiOverlays.map(ov=>({
+    bakedImg: ov.bakedImg,
+    state: JSON.parse(JSON.stringify(ov.state))
+  }));
+  activeOvIdx[snap.fname] = snap.activeOvIdx;
+  strokes[snap.fname] = JSON.parse(JSON.stringify(snap.strokes));
+  const di=document.getElementById('descInput'); if(di) di.value=p.desc;
+  syncSlidersToCurrentPhoto();
+  renderOvSwitcher(); renderOverlayMgrList(); renderThumbs();
+  refreshCanvas(); _updateUndoRedoBtns();
+}
+
+function pushUndo() {
+  if (current < 0) return;
+  const p = photos[current]; if (!p) return;
+  if (!p._undoStack) p._undoStack = [];
+  if (!p._redoStack) p._redoStack = [];
+  const snap = _snapshotState(); if (!snap) return;
+  p._undoStack.push(snap);
+  if (p._undoStack.length > UNDO_LIMIT) p._undoStack.shift();
+  p._redoStack = [];
+  _updateUndoRedoBtns();
+}
+
+function undoAction() {
+  if (current < 0) return;
+  const p = photos[current];
+  if (!p || !p._undoStack || !p._undoStack.length) return;
+  if (!p._redoStack) p._redoStack = [];
+  const cur = _snapshotState();
+  if (cur) { p._redoStack.push(cur); if (p._redoStack.length>UNDO_LIMIT) p._redoStack.shift(); }
+  _restoreSnapshot(p._undoStack.pop());
+}
+
+function redoAction() {
+  if (current < 0) return;
+  const p = photos[current];
+  if (!p || !p._redoStack || !p._redoStack.length) return;
+  if (!p._undoStack) p._undoStack = [];
+  const cur = _snapshotState();
+  if (cur) { p._undoStack.push(cur); if (p._undoStack.length>UNDO_LIMIT) p._undoStack.shift(); }
+  _restoreSnapshot(p._redoStack.pop());
+}
+
+function _updateUndoRedoBtns() {
+  const p = current >= 0 ? photos[current] : null;
+  const uBtn=document.getElementById('undoBtn'), rBtn=document.getElementById('redoBtn');
+  if (uBtn) uBtn.disabled = !(p && p._undoStack && p._undoStack.length);
+  if (rBtn) rBtn.disabled = !(p && p._redoStack && p._redoStack.length);
+}
+
+// ══════════════════════════════════════════════════════════
 //  DESCRIPTION
 // ══════════════════════════════════════════════════════════
 function updateDesc(){
   if(current<0) return;
+  const _now=Date.now(); if(_now-_lastDescPushTime>800){ pushUndo(); _lastDescPushTime=_now; }
   photos[current].desc=document.getElementById('descInput').value;
   // Sync editor row textarea
   const ta=document.querySelector('#descRow_'+current+' .desc-line-input');
@@ -4694,6 +4820,7 @@ async function applyTieCrop(){
   });
 
   if(tieSlide){
+    const _savedCurrent=current; current=photos.indexOf(tieSlide); if(current>=0) pushUndo(); current=_savedCurrent;
     tieBakedImgs[tieSlide.file.name]=bakedImg;
     tieSourceImgs[tieSlide.file.name]=item.img;
     tieSourceData[tieSlide.file.name]={pan:{x:tieCropPan.x,y:tieCropPan.y},zoom:tieCropZoom,rotation:tieCropRotation,cropW:W,cropH:H};
@@ -5268,7 +5395,7 @@ function renderOvSwitcher(){
     wrap.appendChild(img);
     const lbl=document.createElement('div');lbl.className='ov-swatch-lbl';lbl.textContent='#'+(idx+1);wrap.appendChild(lbl);
     const del=document.createElement('button');del.className='ov-swatch-del';del.textContent='×';del.title='Remove';
-    del.onclick=(e)=>{e.stopPropagation();multiOverlays[fname].splice(idx,1);activeOvIdx[fname]=Math.max(0,Math.min(actIdx,multiOverlays[fname].length-1));renderOvSwitcher();renderOverlayMgrList();refreshCanvas();};
+    del.onclick=(e)=>{e.stopPropagation();pushUndo();multiOverlays[fname].splice(idx,1);activeOvIdx[fname]=Math.max(0,Math.min(actIdx,multiOverlays[fname].length-1));renderOvSwitcher();renderOverlayMgrList();refreshCanvas();};
     wrap.appendChild(del);sw.appendChild(wrap);
   });
   const ab=document.createElement('button');ab.className='ov-add-btn';ab.title='Add overlay to this slide';ab.textContent='+';
@@ -5299,6 +5426,7 @@ function addOverlayToCurrentSlide(file){
         const r=calcR(p);const W=p.img.naturalWidth,H=p.img.naturalHeight;
         const n=multiOverlays[fname].length;
         const offX=Math.round((n%3)*r*.45),offY=Math.round(Math.floor(n/3)*r*.45);
+        pushUndo();
         multiOverlays[fname].push({bakedImg:bi,state:{
           cx:Math.max(r,Math.min(W-r-10,W-r-30-offX)),cy:Math.max(r,Math.min(H-r-10,H-r-30-offY)),r,
           ax:W*.5,ay:H*.5,cp1x:W*.5,cp1y:H*.5-H*.15,cp2x:W*.65,cp2y:H-r-30-H*.15,
