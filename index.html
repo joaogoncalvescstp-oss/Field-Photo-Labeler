@@ -3177,14 +3177,13 @@ function onDragStart(e){
     }
 
     // anchor pin resize handle
-    const pinRActual=getAnchorSizePixels(p.img.naturalWidth);
-    const pinR=pinRActual+10;
+    const pinR=st.anchorSz?Math.round(p.img.naturalWidth*st.anchorSz/100):getAnchorSizePixels(p.img.naturalWidth);
     const angleAnchor=Math.PI*.28;
     const ahx=ax+pinR*Math.cos(angleAnchor),ahy=ay+pinR*Math.sin(angleAnchor);
     const ahr=Math.max(12,pinR*.1);
     if(dist(x,y,ahx,ahy)<=ahr+4){
       pushUndo();
-      dragging='anchor-resize'; dragStart={x,y}; dragOrigVal={...st, _origAnchorSz: parseInt(document.getElementById('anchorSz').value)||5};
+      dragging='anchor-resize'; dragStart={x,y}; dragOrigVal={...st};
       canvas.style.cursor='nwse-resize'; return;
     }
 
@@ -3273,7 +3272,8 @@ function onDragMove(e){
   } else if(dragging==='circle-resize'){
     if(st) st.r=Math.max(20,dragOrigVal.r+Math.round((dx+dy)*.5));
   } else if(dragging==='anchor-resize'){
-    const newSize=Math.max(1,Math.min(30,(dragOrigVal._origAnchorSz||5)+Math.round((dx+dy)*.02)));
+    const newSize=Math.max(1,Math.min(30,(dragOrigVal.anchorSz||5)+Math.round((dx+dy)*.02)));
+    if(st) st.anchorSz=newSize;
     document.getElementById('anchorSz').value=newSize;
     document.getElementById('anchorSzVal').textContent=newSize;
     document.getElementById('anchorSzInput').value=newSize;
