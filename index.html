@@ -1,4 +1,4 @@
-<html lang="en">
+[Resource from github at repo://joaogoncalvescstp-oss/field-photo-labeler/sha/d384ff9d6409d4e5ae7950d4de408f705137a04d/contents/index.html] <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3180,11 +3180,11 @@ function onDragStart(e){
     const pinRActual=getAnchorSizePixels(p.img.naturalWidth);
     const pinR=pinRActual+10;
     const angleAnchor=Math.PI*.28;
-    const ahx=ax+pinRActual*Math.cos(angleAnchor),ahy=ay+pinRActual*Math.sin(angleAnchor);
-    const ahr=Math.max(12,pinRActual*.1);
+    const ahx=ax+pinR*Math.cos(angleAnchor),ahy=ay+pinR*Math.sin(angleAnchor);
+    const ahr=Math.max(12,pinR*.1);
     if(dist(x,y,ahx,ahy)<=ahr+4){
       pushUndo();
-      dragging='anchor-resize'; dragStart={x,y}; dragOrigVal={...st};
+      dragging='anchor-resize'; dragStart={x,y}; dragOrigVal={...st, _origAnchorSz: parseInt(document.getElementById('anchorSz').value)||5};
       canvas.style.cursor='nwse-resize'; return;
     }
 
@@ -3273,10 +3273,10 @@ function onDragMove(e){
   } else if(dragging==='circle-resize'){
     if(st) st.r=Math.max(20,dragOrigVal.r+Math.round((dx+dy)*.5));
   } else if(dragging==='anchor-resize'){
-    const newSize=Math.max(1,Math.min(30,parseInt(document.getElementById('anchorSz').value||'5')+Math.round((dx+dy)*.02)));
+    const newSize=Math.max(1,Math.min(30,(dragOrigVal._origAnchorSz||5)+Math.round((dx+dy)*.02)));
     document.getElementById('anchorSz').value=newSize;
     document.getElementById('anchorSzVal').textContent=newSize;
-    globalSyncAllRadii();
+    document.getElementById('anchorSzInput').value=newSize;
     refreshCanvas();
   } else if(dragging==='anchor'){
     if(st){st.ax=dragOrigVal.ax+dx;st.ay=dragOrigVal.ay+dy;st.cp1x=dragOrigVal.cp1x+dx;st.cp1y=dragOrigVal.cp1y+dy;}
