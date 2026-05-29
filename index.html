@@ -28,7 +28,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   /* Allow text selection everywhere except drag handles */
-  input, textarea, select, .db-result, .db-field, .db-field-val, .db-field-lbl, .notice, .section-label, .sidebar-scroll { user-select:text; }
+  input, textarea, select, .db-result, .db-field, .db-field-val, .db-field-lbl, .notice, .sidebar-scroll { user-select:text; }
   .swatch, .btn, .tool-btn, .style-btn, .ov-btn, .dim-toggle, .reorder-handle { user-select:none; }
   body{background:var(--bg);color:var(--text);font-family:'Open Sans','Red Hat Text',sans-serif;height:100vh;max-height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
@@ -41,7 +41,12 @@
   .sidebar{background:var(--surface);border-right:2px solid rgba(241,180,52,.3);overflow:hidden;padding:0;display:flex;flex-direction:column;height:100%}
   .sidebar-scroll{flex:1;overflow-y:scroll;overflow-x:hidden;padding:12px 14px 24px 16px;display:flex;flex-direction:column;gap:14px;height:0;user-select:text}
 
-  .section-label{font-family:'Red Hat Display',sans-serif;font-weight:700;font-size:.7rem;color:#F1B434;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;border-bottom:1px solid rgba(241,180,52,.25);padding-bottom:4px}
+  .section-label{font-family:'Red Hat Display',sans-serif;font-weight:700;font-size:.7rem;color:#F1B434;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;border-bottom:1px solid rgba(241,180,52,.25);padding-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color .2s}
+  .section-label:hover{color:#ffd060}
+  .section-caret{font-size:.65rem;opacity:.7;transition:transform .25s;flex-shrink:0;margin-left:4px}
+  .sidebar-section.collapsed>.section-label>.section-caret{transform:rotate(-90deg)}
+  .section-body{overflow:hidden;transition:max-height .3s ease}
+  .sidebar-section.collapsed>.section-body{display:none}
 
   .field-group{display:flex;flex-direction:column;gap:8px}
 
@@ -78,32 +83,6 @@
   .canvas-toolbar .tool-group{display:flex;align-items:center;gap:8px;padding-right:12px;border-right:1px solid var(--border)}
   .canvas-toolbar .tool-group:last-child{border-right:none}
   .canvas-toolbar label{font-size:.75rem;white-space:nowrap}
-  /* ── Toolbar dropdowns ─────────────────────────────────── */
-  .tb-drop{position:relative;display:inline-flex;align-items:center}
-  .tb-drop-btn{
-    display:flex;align-items:center;gap:5px;
-    padding:4px 11px;border-radius:6px;
-    background:var(--surface2);border:1px solid var(--border);
-    color:var(--text);cursor:pointer;font-size:.75rem;
-    font-family:'Share Tech Mono',monospace;
-    transition:border-color .2s,background .2s;white-space:nowrap;
-    line-height:1.4;
-  }
-  .tb-drop-btn:hover{border-color:var(--accent);background:rgba(241,180,52,.08)}
-  .tb-drop-btn.has-active{border-color:var(--accent);background:rgba(241,180,52,.13)}
-  .tb-drop-btn .tb-caret{font-size:.55rem;opacity:.7;transition:transform .2s;display:inline-block}
-  .tb-drop.open>.tb-drop-btn{border-color:var(--accent);background:rgba(241,180,52,.15)}
-  .tb-drop.open>.tb-drop-btn .tb-caret{transform:rotate(180deg)}
-  .tb-drop-panel{
-    display:none;position:absolute;top:calc(100% + 7px);left:0;z-index:300;
-    background:var(--surface);border:1px solid rgba(241,180,52,.35);border-radius:8px;
-    padding:10px 14px;gap:8px;align-items:center;flex-wrap:wrap;
-    box-shadow:0 8px 28px rgba(0,0,0,.55);
-    min-width:max-content;
-  }
-  .tb-drop.open>.tb-drop-panel{display:flex}
-  .tb-drop-panel label{font-size:.75rem;white-space:nowrap;margin:0}
-  .tb-hint{font-size:.68rem;color:var(--muted);white-space:nowrap;padding:0 4px}
   .canvas-wrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:20px}
   canvas{max-width:100%;cursor:crosshair;border:1px solid rgba(241,180,52,.2);border-radius:2px;display:block;box-shadow:0 0 30px rgba(241,180,52,.08)}
 
@@ -419,22 +398,20 @@
   <div class="sidebar">
   <div class="sidebar-scroll">
 
-    <!-- ══ BATCH LOAD ══ -->
-    <div>
-      <div class="section-label">📦 Batch Load</div>
-      <p class="notice">Two-step batch: load all survey slides in order, then load all close-up images and they'll auto-pair as circle overlays on their matching Tie slides.</p>
+    <!-- ══ BATCH LOAD ══ --><div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>📦 Batch Load</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <p class="notice">Two-step batch: load all survey slides in order, then load all close-up images and they'll auto-pair as circle overlays on their matching Tie slides.</p>
       <div style="display:flex;gap:6px;flex-direction:column;margin-top:6px">
         <button class="btn btn-secondary" onclick="openBatchModal()">⚡ Open Batch Manager</button>
         <button class="btn btn-secondary" onclick="openReorderModal()">⇅ Edit Slide &amp; Overlay Order</button>
-      </div>
+      </div></div>
     </div>
 
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
     <div id="thumbStrip" class="thumb-strip" style="display:none"></div>
-
-    <div>
-      <div class="section-label">🏛 Survey Info</div>
-      <div class="field-group">
+<div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>🏛 Survey Info</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <div class="field-group">
 
         <!-- City ID lookup -->
         <label>City ID <span class="db-badge miss" id="cityIdBadge"></span></label>
@@ -477,17 +454,16 @@
             oninput="refreshCanvas()">
           <button class="db-clear" onclick="document.getElementById('surveyType').value='';refreshCanvas();" title="Clear">✕</button>
         </div>
-      </div>
+      </div></div>
     </div>
 
     <!-- ══ CIRCLE OVERLAY SETTINGS (current slide only) ══ -->
     <input type="file" id="circleImgInput" accept="image/*" style="display:none">
     <input type="file" id="overlayAddInput" accept="image/*" style="display:none">
     <input type="file" id="ovAddCurrentInput" accept="image/*" style="display:none">
-    <input type="file" id="ovEditCropInput" accept="image/*" style="display:none">
-    <div>
-      <div class="section-label">🔵 Circle Overlay Settings</div>
-      <p class="notice">Use the Batch Manager (Option 2) to crop each Tie close-up. Changes apply to the current slide.</p>
+    <input type="file" id="ovEditCropInput" accept="image/*" style="display:none"><div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>🔵 Circle Overlay Settings</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <p class="notice">Use the Batch Manager (Option 2) to crop each Tie close-up. Changes apply to the current slide.</p>
 
       <!-- ── Overlay thumbnail switcher (current slide) ── -->
       <div style="margin-top:10px">
@@ -568,26 +544,24 @@
           📍 Drag <b>anchor pin</b> to mark location<br>
           ↩ Drag <b>◆ handles</b> to reshape spline
         </div>
-      </div>
+      </div></div>
     </div>
 
     <!-- ══ DESCRIPTIONS TXT ══ -->
-    <input type="file" id="csvInput" accept=".csv,.txt" style="display:none">
-    <div>
-      <div class="section-label">📋 Slide Descriptions</div>
-      <p class="notice">Each line = one slide's description, in slide order. Import a .txt file or type directly. Drag any description on the canvas to reposition it.</p>
+    <input type="file" id="csvInput" accept=".csv,.txt" style="display:none"><div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>📋 Slide Descriptions</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <p class="notice">Each line = one slide's description, in slide order. Import a .txt file or type directly. Drag any description on the canvas to reposition it.</p>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="document.getElementById('descTxtInput').click()">📥 Import .txt</button>
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="exportDescTxt()">📤 Export .txt</button>
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="clearAllDescs()">✕ Clear All</button>
       </div>
       <input type="file" id="descTxtInput" accept=".txt,.csv" style="display:none">
-      <div class="desc-editor" id="descEditor" style="margin-top:8px;max-height:260px;overflow-y:auto"></div>
+      <div class="desc-editor" id="descEditor" style="margin-top:8px;max-height:260px;overflow-y:auto"></div></div>
     </div>
-
-    <div>
-      <div class="section-label">🔤 Text Style</div>
-      <div class="field-group">
+<div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>🔤 Text Style</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <div class="field-group">
         <label>Font Family</label>
         <select class="font-select" id="fontFamily" onchange="refreshCanvas()">
           <option value="Red Hat Text" selected>Red Hat Text (default)</option>
@@ -674,15 +648,14 @@
         </div>
         <input type="range" id="boxPad" min="2" max="40" value="10" style="width:100%"
           oninput="textPadding=parseInt(this.value);document.getElementById('padVal').textContent=this.value;document.getElementById('boxPadInput').value=this.value;refreshCanvas()">
-      </div>
+      </div></div>
     </div>
 
     <input type="text" id="descInput" style="display:none" oninput="updateDesc()">
 
-    <!-- ══ PEN / LINE TOOL ══ -->
-    <div>
-      <div class="section-label">✏️ Pen &amp; Line Tool</div>
-      <p class="notice">Draw freehand or straight lines. Right-click a stroke to delete it.</p>
+    <!-- ══ PEN / LINE TOOL ══ --><div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>✏️ Pen &amp; Line Tool</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <p class="notice">Draw freehand or straight lines. Right-click a stroke to delete it.</p>
       <div class="pen-toolbar">
         <button class="tool-btn active" id="toolSelect"   title="Select / Drag" onclick="setActiveTool('select')">↖</button>
         <button class="tool-btn"        id="toolPen"      title="Freehand Pen"  onclick="setActiveTool('pen')">✏</button>
@@ -763,13 +736,12 @@
           <label style="flex-shrink:0;font-size:.72rem">px</label>
 
         </div>
-      </div>
+      </div></div>
     </div>
 
-    <!-- ══ WATERMARK ══ -->
-    <div>
-      <div class="section-label">🏙 Watermark</div>
-      <div style="display:flex;gap:6px;flex-direction:column;margin-top:4px">
+    <!-- ══ WATERMARK ══ --><div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>🏙 Watermark</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <div style="display:flex;gap:6px;flex-direction:column;margin-top:4px">
         <div style="display:flex;gap:8px;align-items:center">
           <label style="flex:1;margin:0">Opacity <span id="wmOpacVal">100</span>%</label>
           <input type="number" id="wmOpacInput" min="5" max="100" value="100" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px"
@@ -785,12 +757,11 @@
         </div>
         <input type="range" id="wmSz" min="5" max="50" value="20" style="width:100%"
           oninput="watermarkScalePct=parseInt(this.value);document.getElementById('wmSzVal').textContent=this.value;document.getElementById('wmSzInput').value=this.value;refreshCanvas()">
-      </div>
+      </div></div>
     </div>
-
-    <div>
-      <div class="section-label">💾 Export</div>
-
+<div class="sidebar-section">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>💾 Export</span><span class="section-caret">▾</span></div>
+      <div class="section-body">
       <!-- Export tip: ZIP is the best way to get all files -->
       <p class="notice" style="margin-bottom:4px">⬇ <b>All JPGs</b> downloads each file one by one. Use <b>🗜 ZIP</b> to get everything in a single file.</p>
 
@@ -803,7 +774,7 @@
       <button class="btn btn-secondary" onclick="exportCSV()" style="margin-top:6px">📄 Export CSV Log</button>
       <button class="btn btn-secondary" onclick="shareCurrentJPG()" id="btnShare" style="margin-top:6px">
         ↗ Share Current Slide
-      </button>
+      </button></div>
     </div>
 
   </div><!-- /sidebar-scroll -->
@@ -813,66 +784,37 @@
   <div class="canvas-area">
     <button class="sidebar-pull-tab" id="sidebarPullTab" onclick="toggleSidebar()" title="Toggle sidebar">◀</button>
     <div class="canvas-toolbar" id="canvasToolbar" style="display:none">
-
-      <!-- ── Photo ─────────────────────────────────────── -->
-      <div class="tb-drop" id="tbDropPhoto">
-        <button class="tb-drop-btn" onclick="toggleTbDrop('tbDropPhoto')" title="Current photo info">
-          📷 Photo <span class="tb-caret">▾</span>
-        </button>
-        <div class="tb-drop-panel">
-          <label>Current:</label>
-          <span id="currentTitleBadge" class="current-title-badge">—</span>
-        </div>
+      <div class="tool-group">
+        <label>Photo:</label>
+        <span id="currentTitleBadge" class="current-title-badge">—</span>
       </div>
-
-      <!-- ── Navigate ──────────────────────────────────── -->
-      <div class="tb-drop" id="tbDropNav">
-        <button class="tb-drop-btn" onclick="toggleTbDrop('tbDropNav')" title="Navigate photos">
-          ◀▶ Navigate <span class="tb-caret">▾</span>
-        </button>
-        <div class="tb-drop-panel">
-          <button class="btn btn-secondary btn-sm" onclick="navigate(-1);closeTbDrops()">◀ Prev</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigate(1);closeTbDrops()">Next ▶</button>
-        </div>
+      <div class="tool-group">
+        <button class="btn btn-secondary btn-sm" onclick="navigate(-1)">◀ Prev</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate(1)">Next ▶</button>
       </div>
-
-      <!-- ── Undo / Redo ────────────────────────────────── -->
-      <div class="tb-drop" id="tbDropHistory">
-        <button class="tb-drop-btn" onclick="toggleTbDrop('tbDropHistory')" title="Undo / Redo history">
-          ↩ History <span class="tb-caret">▾</span>
-        </button>
-        <div class="tb-drop-panel">
-          <button id="undoBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
-          <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
-        </div>
+      <div class="tool-group">
+        <button id="undoBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
+        <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
       </div>
-
-      <!-- ── Selection / Label ─────────────────────────── -->
-      <div class="tb-drop" id="tbDropLabel" style="display:none">
-        <button class="tb-drop-btn has-active" onclick="toggleTbDrop('tbDropLabel')" title="Selected label options">
-          🏷 Label <span class="tb-caret">▾</span>
-        </button>
-        <div class="tb-drop-panel">
-          <span id="selectedLabelBadge" class="selected-label-badge">—</span>
-          <button id="btnParaToggle" title="Toggle paragraph / single-line mode"
-            style="padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:.72rem;transition:all .85s"
-            onclick="toggleParaMode()">— Single</button>
-          <label>Size</label>
-          <input type="number" id="labelFontSizeInput" min="10" max="600" value="150"
-            title="Font size for this label only"
-            style="width:62px;padding:3px 6px;background:#040e28;border:1px solid rgba(241,180,52,.3);border-radius:4px;color:#D7D2CB;font-family:'Share Tech Mono',monospace;font-size:.78rem;text-align:center"
-            oninput="setLabelFontSize(parseInt(this.value)||80)">
-          <span style="font-size:.68rem;color:var(--muted)">px</span>
-          <input type="color" id="labelColorInput" value="#ffffff" title="Color for this label"
-            style="width:28px;height:26px;padding:2px;border-radius:4px;border:1px solid rgba(241,180,52,.3);background:#040e28;cursor:pointer;flex-shrink:0"
-            oninput="setLabelColor(this.value)">
-          <button class="btn btn-secondary btn-sm" onclick="clearSelectedLabel()">✕</button>
-        </div>
+      <div class="tool-group">
+        <label style="font-size:.7rem;color:var(--muted)">↖ Select · dbl-click text to edit · drag box · drag ◢ to resize</label>
       </div>
-
-      <!-- ── Hint ──────────────────────────────────────── -->
-      <span class="tb-hint">↖ Select · dbl-click to edit · drag ◢ to resize</span>
-
+      <div class="tool-group" id="selectedLabelGroup" style="display:none">
+        <span id="selectedLabelBadge" class="selected-label-badge">—</span>
+        <button id="btnParaToggle" title="Toggle paragraph / single-line mode"
+          style="padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:.72rem;transition:all .85s"
+          onclick="toggleParaMode()">— Single</button>
+        <label style="font-size:.7rem;white-space:nowrap;margin:0">Size</label>
+        <input type="number" id="labelFontSizeInput" min="10" max="600" value="150"
+          title="Font size for this label only"
+          style="width:62px;padding:3px 6px;background:#040e28;border:1px solid rgba(241,180,52,.3);border-radius:4px;color:#D7D2CB;font-family:'Share Tech Mono',monospace;font-size:.78rem;text-align:center"
+          oninput="setLabelFontSize(parseInt(this.value)||80)">
+        <span style="font-size:.68rem;color:var(--muted)">px</span>
+        <input type="color" id="labelColorInput" value="#ffffff" title="Color for this label"
+          style="width:28px;height:26px;padding:2px;border-radius:4px;border:1px solid rgba(241,180,52,.3);background:#040e28;cursor:pointer;flex-shrink:0"
+          oninput="setLabelColor(this.value)">
+        <button class="btn btn-secondary btn-sm" onclick="clearSelectedLabel()">✕</button>
+      </div>
     </div>
     <div class="empty-state" id="emptyState">
       <img src="data:image/svg+xml;base64,PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MDEuNDggMjM2LjExIj48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6IzIzNjdkMzt9LmNscy0ye2ZpbGw6I2ZmZjt9LmNscy0ze2ZpbGw6I2YwYjIzMTt9PC9zdHlsZT48L2RlZnM+PHJlY3QgY2xhc3M9ImNscy0xIiB4PSIzNy43NCIgeT0iMzcuNzQiIHdpZHRoPSIxMTEuMzgiIGhlaWdodD0iMTYwLjY0Ii8+PHBhdGggY2xhc3M9ImNscy0yIiBkPSJNMTIwLjI0LDE0Mi44aDEuNDZ2NC4zOGg2VjEzMy42N2ExLDEsMCwwLDAtLjQxLS44MWwtNi40My00LjY1YTEsMSwwLDAsMC0xLjE4LDBsLTYuNDMsNC42NWExLDEsMCwwLDAtLjQxLjgxdjEzLjUxaDZWMTQyLjhaIi8+PHBhdGggY2xhc3M9ImNscy0yIiBkPSJNMTAyLjQ1LDE0Mi44aDEuNDZ2NC4zOGg2VjEzMy42N2ExLDEsMCwwLDAtLjQyLS44MUwxMDMsMTI4LjIxYTEsMSwwLDAsMC0xLjE3LDBsLTYuNDQsNC42NWExLDEsMCwwLDAtLjQxLjgxdjEzLjUxaDZWMTQyLjhaIi8+PHBhdGggY2xhc3M9ImNscy0yIiBkPSJNODQuNCwxNDIuOGgxLjQ2djQuMzhoNlYxMzMuNjdhMSwxLDAsMCwwLS40MS0uODFMODUsMTI4LjIxYTEsMSwwLDAsMC0xLjE4LDBsLTYuNDMsNC42NWExLDEsMCwwLDAtLjQxLjgxdjEzLjUxaDZWMTQyLjhaIi8+PHBhdGggY2xhc3M9ImNscy0yIiBkPSJNNjYuNjEsMTQyLjhoMS40NnY0LjM4aDZWMTMzLjY3YTEsMSwwLDAsMC0uNDItLjgxbC02LjQzLTQuNjVhMSwxLDAsMCwwLTEuMTcsMGwtNi40NCw0LjY1YTEsMSwwLDAsMC0uNDEuODF2MTMuNTFoNlYxNDIuOFoiLz48cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Ik0xMjAuNzYsMTU3Ljg1YTYuMzUsNi4zNSwwLDAsMS05LDAsMTAuMDcsMTAuMDcsMCwwLDAtNy0yLjc0aDBhMTAuMTMsMTAuMTMsMCwwLDAtNi45MiwyLjc0LDYuMzQsNi4zNCwwLDAsMS05LDAsMTAuMDUsMTAuMDUsMCwwLDAtNi44Ny0yLjczaC0uMTFhMTAuMDksMTAuMDksMCwwLDAtNi44MSwyLjczLDYuMzUsNi4zNSwwLDAsMS05LDAsMTAuMDUsMTAuMDUsMCwwLDAtNy0yLjc0djIyLjMxaDY4LjQ5VjE1NS4xMWExMC4xMiwxMC4xMiwwLDAsMC02LjkxLDIuNzQiLz48cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Ik0xMjEuODgsMTA1LjM1aC0uMzhhLjM1LjM1LDAsMCwxLS4zNC0uMjVjLS4xNy0uNTktLjYyLTEuMjItMS4yOC0xLjIyaC0yLjExYTEsMSwwLDAsMS0xLTEsMjguNjYsMjguNjYsMCwwLDAtMTYuODQtMjYsMSwxLDAsMCwxLS41LS40OWwtLjYxLTEuMzFhMS4wNywxLjA3LDAsMCwwLS4zLS4zN2wtLjg0LS42M2ExLDEsMCwwLDEtLjM5LS43OVY2OC43YS4zOC4zOCwwLDAsMSwuMDgtLjIzbC4yNy0uM2EuNDIuNDIsMCwwLDAsLjA5LS4yNFY2Ni4yOGgtLjQ5bC0uMTItLjQ5YTEsMSwwLDAsMC0uOTUtLjc2aC0uMjVhMSwxLDAsMCwxLTEtLjcybC0uODgtMy4yM2ExLDEsMCwwLDEsLjItLjljLjQzLS41MS44OS0xLjM5LS44My0xLjU4aC0uMDljLTEuNzIuMTktMS4yNiwxLjA3LS44MywxLjU4YTEsMSwwLDAsMSwuMjEuOWwtLjg5LDMuMjNhMSwxLDAsMCwxLS45NC43MmgtLjI2YTEsMSwwLDAsMC0xLC43NmwtLjExLjQ5aC0uNDl2MS42NWEuMzYuMzYsMCwwLDAsLjA5LjI0bC4yNi4zYS4zMy4zMywwLDAsMSwuMDkuMjN2NC42YTEsMSwwLDAsMS0uMzkuNzlsLS44NC42M2ExLDEsMCwwLDAtLjMuMzdsLS42MiwxLjMxYTEsMSwwLDAsMS0uNDkuNDksMjguNjYsMjguNjYsMCwwLDAtMTYuODUsMjYsMSwxLDAsMCwxLTEsMUg2N2MtLjY1LDAtMS4xMS42My0xLjI4LDEuMjJhLjM0LjM0LDAsMCwxLS4zMy4yNUg2NXMtLjgzLjA2LS44My43N3YzLjFhMSwxLDAsMCwwLC4zMS43MmwxLjM4LDEuM2ExLDEsMCwwLDEsLjMxLjcydjYuMzNhMSwxLDAsMCwwLDEuNDYuODZsLjA3LDBhMSwxLDAsMCwwLC42Ni0uOWMuMi00LjA3LDEuMDYtNSwxLjczLTUuMTRhMSwxLDAsMCwwLC45MS0uODdjLjQzLTQuNjIsMS42NS01LjQsMi40Ny01LjM3YTEuMDYsMS4wNiwwLDAsMCwxLS42MywyLjgzLDIuODMsMCwwLDEsMS42Mi0xLjc4Yy4xNiwwLDEuOC42OCwyLjQ5LDRhMSwxLDAsMCwwLDEuMDguOGMuODUtLjEyLDIsLjcsMi4zMiw1LjU3YTEsMSwwLDAsMCwuNjQuODdjLjU0LjE3LDEuMjgsMS40NSwxLjgxLDcuMDZ2MGwwLC40NGEuNTQuNTQsMCwwLDAsLjUzLjQ5LjUzLjUzLDAsMCwwLC41My0uNWwwLS4zMWEuMTMuMTMsMCwwLDAsMC0uMDZoMHMuNDQtNiwxLjc4LTYuMjJhLjkxLjkxLDAsMCwwLC43NC0uODZjLjItMi40LjgxLTcuNTIsMi4zOC03LjMzYS45NC45NCwwLDAsMCwxLjA5LS42NGMuNDUtMS44NiwxLjU3LTQuODMsMy42Ny0uODlhMS4yLDEuMiwwLDAsMCwuOTQuNmMuNjcsMCwxLjcyLjU0LDEuODIsNC4yOGExLDEsMCwwLDAsMSwuOTNjLjg2LjA2LDIuMTIsMS42MiwzLjIxLDguNzloMHMwLC4wNywwLC4xMXYwYS41NC41NCwwLDAsMCwuNTEuMzkuNjUuNjUsMCwwLDAsLjU5LS41NnMuNTktNS44NSwyLTZhMSwxLDAsMCwwLC44OS0uOWMuMTYtMi4yNy42OC02LjYyLDIuMjYtNi4yN2EuOTQuOTQsMCwwLDAsMS4xNy0uNjFjLjQ0LTEuNTksMS4zNy0zLjgyLDIuNjQtMWExLjA4LDEuMDgsMCwwLDAsLjk0LjU4Yy44MiwwLDIuMTMuNywyLjQyLDUuMWExLDEsMCwwLDAsLjg1LjkyYy42NC4wOCwxLjUyLDEuMTIsMi4xNSw1LjZhLjM1LjM1LDAsMCwwLC4zNC4zMSwxLjA1LDEuMDUsMCwwLDEsLjMzLjA2LDEsMSwwLDAsMCwxLjM3LS45VjExMmExLDEsMCwwLDEsLjMxLS43MmwxLjM4LTEuM2ExLDEsMCwwLDAsLjMxLS43MnYtMy4xYzAtLjcxLS44My0uNzctLjgzLS43NyIvPjxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTU2My43NCwxMTMuNzV2LTguMTlINTQzLjE3Vjc2aC05LjU5djM3Ljc0Wk01MjIuMSw3NmgtOS41OXYyMS4zYTguNDMsOC40MywwLDAsMS0yLjIzLDYuMTIsNy44Nyw3Ljg3LDAsMCwxLTUuOTEsMi4yOSw4LDgsMCwwLDEtNS45NC0yLjI5LDguMzcsOC4zNywwLDAsMS0yLjI2LTYuMTJWNzZoLTkuNTh2MjEuM2ExOC43NywxOC43NywwLDAsMCwxLjI1LDdBMTQuNzUsMTQuNzUsMCwwLDAsNDk3LDExMy4xYTIxLjY3LDIxLjY3LDAsMCwwLDcuMzMsMS4xOSwyMSwyMSwwLDAsMCw3LjMxLTEuMjEsMTUuOTQsMTUuOTQsMCwwLDAsNS42LTMuNDMsMTUuMTgsMTUuMTgsMCwwLDAsMy41OS01LjM2LDE4LjI3LDE4LjI3LDAsMCwwLDEuMjktN1ptLTYzLjE2LDkuMTcsNC42OCwxMi4wN2gtOS40OFptLTExLjMyLDI4LjU3LDMuNjItOS4xMWgxNS4yMmwzLjU3LDkuMTFINDgwLjRMNDY0LjYyLDc2aC0xMWwtMTYsMzcuNzRabS0yMS43MS0yOC42YTQuMTIsNC4xMiwwLDAsMSwxLjMxLDMuMTYsNCw0LDAsMCwxLTEuMzEsMy4wNyw0Ljg1LDQuODUsMCwwLDEtMy4zOCwxLjE4aC05Ljg2VjgzLjk0aDkuODZhNC43OCw0Ljc4LDAsMCwxLDMuMzgsMS4yMW0tMTMuMjQsMjguNlYxMDAuMjJoMTFhMTQuODUsMTQuODUsMCwwLDAsNS4yNy0uOTIsMTMuNCwxMy40LDAsMCwwLDQuMjEtMi41LDExLjQxLDExLjQxLDAsMCwwLDMuNzktOC41NSwxMS43OCwxMS43OCwwLDAsMC0xLTQuODgsMTIsMTIsMCwwLDAtMi43Ni0zLjg4LDEyLjU0LDEyLjU0LDAsMCwwLTQuMi0yLjU2LDE1LjEsMTUuMSwwLDAsMC01LjMtLjkySDQwMy4wOHYzNy43NFptLTU4LjItMjkuNTR2MjkuNTRoOS41OVY4NC4yMWgxMi43NlY3NkgzNDEuN3Y4LjJaTTI5Ni4xLDExMy43NWg5VjkxbDE4LjI5LDIyLjc1aDguNDdWNzZoLTlWOTcuOUwzMDUuMTMsNzZoLTlaTTI4NC4wNiw3NmgtOS41OHYzNy43NGg5LjU4Wk0yNDQuNiw4NS4xOGw0LjY4LDEyLjA3SDIzOS44Wm0tMTEuMzIsMjguNTcsMy42Mi05LjExaDE1LjIybDMuNTcsOS4xMWgxMC4zN0wyNTAuMjgsNzZoLTExbC0xNiwzNy43NFptLTQyLjIzLTEuMTNhMjcuNTgsMjcuNTgsMCwwLDAsOS4zNCwxLjY3cTcuOTIsMCwxMi41MS0zLjM0YTEwLjYxLDEwLjYxLDAsMCwwLDQuNi05LjA2LDkuMzQsOS4zNCwwLDAsMC0yLjkyLTcuMTJRMjExLjY1LDkyLDIwNiw5MS4xNmwtOC4wOC0xLjI5YTguNDEsOC40MSwwLDAsMS0zLjU0LTEuMTYsMi41MiwyLjUyLDAsMCwxLTEuMDktMi4xOCwyLjY4LDIuNjgsMCwwLDEsMS43LTIuNCw5LjksOS45LDAsMCwxLDQuNi0uODksMTcuMTgsMTcuMTgsMCwwLDEsNiwxLjA4LDIzLjY1LDIzLjY1LDAsMCwxLDYsMy4zOWw1LjA4LTYuODRhMjQuNzcsMjQuNzcsMCwwLDAtNy42MS0zLjk0LDI4LjA1LDI4LjA1LDAsMCwwLTguNzgtMS40NnEtNy40NywwLTExLjc0LDMuMTZhMTAuMTMsMTAuMTMsMCwwLDAtNC4yNiw4LjYsOS41LDkuNSwwLDAsMCwyLjU2LDYuODQsMTIuNywxMi43LDAsMCwwLDcuMzEsMy41MUwyMDIuNzMsOTlhMTEsMTEsMCwwLDEsNC4xNSwxLjM1LDIuNzksMi43OSwwLDAsMSwxLjI2LDIuNDMsMywzLDAsMCwxLTEuODcsMi42OSwxMS4yOSwxMS4yOSwwLDAsMS01LjE2LDEsMTYuODksMTYuODksMCwwLDEtNi40MS0xLjI0LDI3LjQ4LDI3LjQ4LDAsMCwxLTYuNTctNEwxODIuNzcsMTA4YTI3LjcxLDI3LjcxLDAsMCwwLDguMjgsNC42NCIvPjxwYXRoIGNsYXNzPSJjbHMtMyIgZD0iTTQyNywxNDAuMDVsMy4yLDguNTJoLTYuNDdabS03LjcyLDIwLjE3LDIuNDctNi40M2gxMC4zOWwyLjQzLDYuNDNoNy4wOEw0MzAuOSwxMzMuNThoLTcuNDlsLTEwLjkzLDI2LjY0Wm0tMjEtMjAuODZ2MjAuODZoNi41NFYxMzkuMzZoOC43MnYtNS43OGgtMjR2NS43OFpNMzc4LjA4LDE1MGE3LjQ4LDcuNDgsMCwwLDEtMS41OCwyLjQ2QTcuNDQsNy40NCwwLDAsMSwzNjQuMjMsMTUwYTguMTYsOC4xNiwwLDAsMS0uNTctMy4wNiw4LjI1LDguMjUsMCwwLDEsLjU3LTMuMDcsNy4xOCw3LjE4LDAsMCwxLDEuNTgtMi40NSw3LjMzLDcuMzMsMCwwLDEsMi4zOC0xLjYyLDcuNzUsNy43NSwwLDAsMSw1LjkzLDAsNy4yOCw3LjI4LDAsMCwxLDQsNC4wNyw4LjI1LDguMjUsMCwwLDEsLjU3LDMuMDcsOC4xNiw4LjE2LDAsMCwxLS41NywzLjA2bTYuMi04LjQ1YTEzLjUxLDEzLjUxLDAsMCwwLTMtNC4zNywxNCwxNCwwLDAsMC00LjUzLTIuOTIsMTUuMywxNS4zLDAsMCwwLTExLjE5LDAsMTQsMTQsMCwwLDAtNC41MywyLjkyLDEzLjcsMTMuNywwLDAsMC0zLDQuMzcsMTMuNzMsMTMuNzMsMCwwLDAsMCwxMC43NywxMy42MywxMy42MywwLDAsMCwzLDQuMzgsMTQsMTQsMCwwLDAsNC41MywyLjkxLDE1LjE2LDE1LjE2LDAsMCwwLDExLjE5LDAsMTQsMTQsMCwwLDAsNC41My0yLjkxLDEzLjQ1LDEzLjQ1LDAsMCwwLDMtNC4zOCwxMy42MiwxMy42MiwwLDAsMCwwLTEwLjc3TTMzMywxNTkuNDJhMTguMTYsMTguMTYsMCwwLDAsNi4zOCwxLjE4cTUuNCwwLDguNTQtMi4zNmE3LjU5LDcuNTksMCwwLDAsMy4xNC02LjM5LDYuNzIsNi43MiwwLDAsMC0yLTUsMTAuNTgsMTAuNTgsMCwwLDAtNS44NC0yLjU1bC01LjUyLS45MWE1LjYzLDUuNjMsMCwwLDEtMi40MS0uODIsMS44LDEuOCwwLDAsMS0uNzUtMS41NCwxLjg4LDEuODgsMCwwLDEsMS4xNi0xLjY5LDYuNjMsNi42MywwLDAsMSwzLjE0LS42MywxMS40MSwxMS40MSwwLDAsMSw0LjEuNzYsMTYuMTYsMTYuMTYsMCwwLDEsNC4wOSwyLjRsMy40Ni00Ljg0YTE3LjA3LDE3LjA3LDAsMCwwLTUuMi0yLjc4LDE4LjYyLDE4LjYyLDAsMCwwLTYtMXEtNS4xLDAtOCwyLjIyYTcuMjQsNy4yNCwwLDAsMC0yLjkxLDYuMDcsNi44Niw2Ljg2LDAsMCwwLDEuNzUsNC44NCw4LjU1LDguNTUsMCwwLDAsNSwyLjQ3bDUuODYsMWE3LjIsNy4yLDAsMCwxLDIuODQuOTUsMiwyLDAsMCwxLC44NiwxLjcxLDIuMSwyLjEsMCwwLDEtMS4yOCwxLjksNy40NSw3LjQ1LDAsMCwxLTMuNTIuNjksMTEuMTYsMTEuMTYsMCwwLDEtNC4zOC0uODgsMTksMTksMCwwLDEtNC40OS0yLjgxbC0zLjY1LDQuNzZhMTksMTksMCwwLDAsNS42NSwzLjI3bS0xMS4wOS44di01LjY3SDMwNy4yOXYtNWg5LjU2VjE0NGgtOS41NnYtNC43OWgxNC40N3YtNS42N2gtMjF2MjYuNjRabS01My44MSwwaDYuMTZWMTQ0LjE2bDEyLjQ4LDE2LjA2aDUuNzlWMTMzLjU4aC02LjE3VjE0OWwtMTIuMS0xNS40NUgyNjguMVptLTMyLjY2LDBoNi4xN1YxNDQuMTZsMTIuNDgsMTYuMDZoNS43OVYxMzMuNThoLTYuMTdWMTQ5bC0xMi4xLTE1LjQ1aC02LjE3Wm0tOC4yMi0yNi42NGgtNi41NHYyNi42NGg2LjU0Wm0tMjAuOTMsOC40OHYxOC4xNmg2LjE3VjEzMy41OEgyMDQuMmwtNi41OCwxMi41NkwxOTEsMTMzLjU4aC04LjI2djI2LjY0aDZWMTQybDguNzUsMTYuMzNaIi8+PC9zdmc+" alt="Saint Paul" style="width:260px;max-width:70%;opacity:.45;margin-bottom:8px">
@@ -1300,9 +1242,6 @@ function init() {
     } else if (e.key==='y'||e.key==='Y') {
       e.preventDefault(); redoAction();
     }
-  });
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.tb-drop')) closeTbDrops();
   });
 
   // Push undo once per slider drag (not on every oninput tick)
@@ -2996,7 +2935,7 @@ const LABEL_NAMES = {title:'Title',citymon:'City / County ID',date:'Date',desc:'
 
 function setSelectedLabel(key){
   selectedLabel = key;
-  const grp   = document.getElementById('tbDropLabel');
+  const grp   = document.getElementById('selectedLabelGroup');
   const badge = document.getElementById('selectedLabelBadge');
   if(key){
     grp.style.display = 'flex';
@@ -3429,14 +3368,8 @@ function redoAction() {
   _restoreSnapshot(p._redoStack.pop());
 }
 
-function toggleTbDrop(id) {
-  const el = document.getElementById(id);
-  const wasOpen = el.classList.contains('open');
-  closeTbDrops();
-  if (!wasOpen) el.classList.add('open');
-}
-function closeTbDrops() {
-  document.querySelectorAll('.tb-drop.open').forEach(d => d.classList.remove('open'));
+function toggleSidebarSection(header) {
+  header.closest('.sidebar-section').classList.toggle('collapsed');
 }
 
 function _updateUndoRedoBtns() {
