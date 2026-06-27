@@ -1131,6 +1131,7 @@ let hoverX = -9999, hoverY = -9999;
 // Batch load
 let batchSlideFiles   = [];   // ordered survey slide File objects
 let batchCloseupFiles = [];   // ordered Tie close-up File objects
+let zipImportDate     = null; // date extracted from zip filename (MM/DD/YYYY format)
 
 // Pen tool
 let activeTool  = 'select';  // 'select'|'pen'|'line'|'spline'
@@ -1299,6 +1300,23 @@ function loadFiles(files){
   });
 }
 
+// Extract date from zip filename (supports yyyymmdd_PLSS### or yyyymmdd_MON#### format)
+function extractDateFromZipName(zipFilename){
+  // Match yyyymmdd at start or end of filename (before .zip)
+  const match=zipFilename.replace(/\.zip$/i,'').match(/(\d{8})/);
+  if(match){
+    const yyyymmdd=match[1];
+    const yyyy=yyyymmdd.substring(0,4);
+    const mm=yyyymmdd.substring(4,6);
+    const dd=yyyymmdd.substring(6,8);
+    // Validate date components
+    if(mm>='01'&&mm<='12'&&dd>='01'&&dd<='31'){
+      return `${mm}/${dd}/${yyyy}`; // Return in MM/DD/YYYY format (matches formatDate output)
+    }
+  }
+  return null;
+}
+
 // ── Generic ZIP image extractor used by all ZIP-load paths ────────────
 async function extractImagesFromZip(zipFile){
   const JSZip=await loadJSZip();
@@ -1321,6 +1339,7 @@ async function importSlidesFromZip(zipFile){
   try{ files=await extractImagesFromZip(zipFile); }
   catch(e){ alert('Could not read ZIP file.'); return; }
   if(!files){ alert('No image files found inside the ZIP.'); return; }
+  zipImportDate=extractDateFromZipName(zipFile.name);
   batchSlideFiles=sortFilesByName(files);
   renderBatchSlideList();
   document.getElementById('batchStatus1').textContent=`${files.length} image(s) loaded from ZIP — click "Load Slides" to continue.`;
@@ -1332,6 +1351,7 @@ async function importCloseupsFromZip(zipFile){
   try{ files=await extractImagesFromZip(zipFile); }
   catch(e){ alert('Could not read ZIP file.'); return; }
   if(!files){ alert('No image files found inside the ZIP.'); return; }
+  zipImportDate=extractDateFromZipName(zipFile.name);
   // Keep only files whose name contains "Cls" (e.g. TieF_Cls_Plss193_20260422.jpg)
   const clsFiles=files.filter(f=>/Cls/i.test(f.name.replace(/\.[^.]+$/,'')));
   if(!clsFiles.length){ alert('No close-up images (Cls) found in the ZIP.'); return; }
@@ -4541,7 +4561,11 @@ async function runLoadSlides(){
       tieIndex:tieIdx,
       tieLetter:isTie?p.letter:null
     };
-    extractExifDate(file).then(d=>{photo.date=d||formatDate(new Date());});
+    if(zipImportDate){
+      photo.date=zipImportDate;
+    }else{
+      extractExifDate(file).then(d=>{photo.date=d||formatDate(new Date());});
+    }
     const reader=new FileReader();
     reader.onload=ev=>{
       const img=new Image();
@@ -4619,6 +4643,7 @@ async function runLoadSlides(){
   renderThumbs();
   selectPhoto(0);
   btn.disabled=false;
+  zipImportDate=null;
   setTimeout(()=>closeBatchModal(),900);
 }
 
