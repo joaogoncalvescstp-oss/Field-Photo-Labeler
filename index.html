@@ -83,7 +83,10 @@
   .canvas-toolbar .tool-group{display:flex;align-items:center;gap:8px;padding-right:12px;border-right:1px solid var(--border)}
   .canvas-toolbar .tool-group:last-child{border-right:none}
   .canvas-toolbar label{font-size:.75rem;white-space:nowrap}
-  .canvas-wrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:20px}
+  .canvas-wrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:flex-start;padding:20px}
+  #mainCanvas{margin:auto;flex-shrink:0;max-width:none}
+  .zoom-label{min-width:74px;text-align:center;font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--muted);cursor:pointer}
+  .zoom-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(240,165,0,.18)}
   canvas{max-width:100%;cursor:crosshair;border:1px solid rgba(241,180,52,.2);border-radius:2px;display:block;box-shadow:0 0 30px rgba(241,180,52,.08)}
 
   .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#D7D2CB;gap:6px;text-align:center;padding:24px}
@@ -819,6 +822,15 @@
         <button id="undoBtn" class="btn btn-secondary btn-sm" onclick="undoAction()" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
         <button id="redoBtn" class="btn btn-secondary btn-sm" onclick="redoAction()" title="Redo (Ctrl+Y)" disabled>↪ Redo</button>
       </div>
+      <div class="tool-group" id="zoomGroup">
+        <button class="btn btn-secondary btn-sm" onclick="zoomStep(-1)" title="Zoom out (Ctrl + −)">−</button>
+        <span id="zoomLabel" class="zoom-label" title="Click for 100% (actual pixels)" onclick="setZoom(1)">Fit</span>
+        <button class="btn btn-secondary btn-sm" onclick="zoomStep(1)" title="Zoom in (Ctrl + +)">+</button>
+        <button class="btn btn-secondary btn-sm zoom-btn active" id="zoomFitBtn" onclick="setZoomMode('fit')" title="Fit whole photo in view (Ctrl+0)">⤢ Fit</button>
+        <button class="btn btn-secondary btn-sm zoom-btn" id="zoomWidthBtn" onclick="setZoomMode('width')" title="Fit photo width">↔ Width</button>
+        <button class="btn btn-secondary btn-sm zoom-btn" id="zoomHeightBtn" onclick="setZoomMode('height')" title="Fit photo height">↕ Height</button>
+        <button class="btn btn-secondary btn-sm zoom-btn" id="zoom100Btn" onclick="setZoom(1)" title="Actual pixels (100%)">1:1</button>
+      </div>
       <div class="tool-group">
         <label style="font-size:.7rem;color:var(--muted)">↖ Select · dbl-click text to edit · drag box · drag ◢ to resize</label>
       </div>
@@ -1022,7 +1034,35 @@
   </div>
 </div>
 
+<!--
+  ══════════════════════════════════════════════════════════════════════
+   THIRD-PARTY CODE, LIBRARIES & MODELS — ACKNOWLEDGEMENTS
+   (full list with licence links: THIRD_PARTY_NOTICES.md)
+  ──────────────────────────────────────────────────────────────────────
+   jsPDF 2.5.1            — PDF export.            MIT. github.com/parallax/jsPDF
+   svg2pdf.js 2.2.3       — SVG → PDF for export.  MIT. github.com/yWorks/svg2pdf.js
+   JSZip 3.10.1           — ZIP export.            MIT (dual MIT/GPLv3). github.com/Stuk/jszip
+   MediaPipe Tasks Vision — face + person detection for Privacy Blur.
+     0.10.14                Apache-2.0. github.com/google-ai-edge/mediapipe
+     Models: BlazeFace short-range, EfficientDet-Lite2 (COCO) — Apache-2.0,
+     hosted by Google at storage.googleapis.com/mediapipe-models
+   ONNX Runtime Web 1.20.1 — runs the number plate model. MIT.
+                            github.com/microsoft/onnxruntime
+   YOLOv9-t licence plate detector (models/yolo-v9-t-640-license-plates-end2end.onnx)
+     — MIT, Copyright (c) 2024 ankandrew. github.com/ankandrew/open-image-models
+       (licence text: models/LICENSE-open-image-models.txt). Built on the YOLOv9
+       architecture by WongKinYiu et al. (github.com/WongKinYiu/yolov9).
+   Fonts: Red Hat Display / Red Hat Text, Open Sans, Share Tech Mono — SIL OFL 1.1
+     (Google Fonts).
+  ──────────────────────────────────────────────────────────────────────
+   Reviewed but NOT used: github.com/JaiDoshi777/AI-for-Privacy-Automated-License-Plate-Blurring
+   (OpenCV Haar cascade). No code was copied from it; it found ~3/8 plates in
+   testing vs 8/8 for the YOLOv9 model above.
+  ══════════════════════════════════════════════════════════════════════
+-->
+<!-- jsPDF (MIT) — github.com/parallax/jsPDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- svg2pdf.js (MIT) — github.com/yWorks/svg2pdf.js -->
 <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════
@@ -1251,6 +1291,7 @@ function init() {
   });
 
   setupCanvasDrag();
+  setupZoomControls();
   setupCropModalEvents();
   setupBatchModal();
 
@@ -1265,6 +1306,12 @@ function init() {
       e.shiftKey ? redoAction() : undoAction();
     } else if (e.key==='y'||e.key==='Y') {
       e.preventDefault(); redoAction();
+    } else if (e.key==='='||e.key==='+') {
+      e.preventDefault(); zoomStep(1);
+    } else if (e.key==='-'||e.key==='_') {
+      e.preventDefault(); zoomStep(-1);
+    } else if (e.key==='0') {
+      e.preventDefault(); setZoomMode('fit');
     }
   });
 
@@ -1820,14 +1867,117 @@ function updateCirclePreview(){
 const canvas=document.getElementById('mainCanvas');
 const ctx=canvas.getContext('2d');
 
+// ══════════════════════════════════════════════════════════
+//  ZOOM — Fit / Fit width / Fit height / 1:1 / step zoom
+//  Display-only: changes the canvas CSS size, never the photo
+//  resolution, so exports are unaffected.
+// ══════════════════════════════════════════════════════════
+const ZOOM_STEPS = [0.05,0.1,0.125,0.167,0.25,0.333,0.5,0.667,0.75,1,1.25,1.5,2,3,4,6,8];
+let zoomMode  = 'fit';    // 'fit'|'width'|'height'|'custom'
+let zoomLevel = 1;        // CSS px per photo px (used when zoomMode==='custom')
+let _scrollbarW = null;
+
+function _getScrollbarWidth(){
+  if(_scrollbarW===null){
+    const d=document.createElement('div');
+    d.style.cssText='position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll';
+    document.body.appendChild(d); _scrollbarW=d.offsetWidth-d.clientWidth; d.remove();
+  }
+  return _scrollbarW;
+}
+
+// Scale that the current zoom mode resolves to for the current photo
+function currentZoomScale(){
+  if(!canvas.width||!canvas.height) return 1;
+  if(zoomMode==='custom') return zoomLevel;
+  const wrap=document.getElementById('canvasWrap');
+  const cs=getComputedStyle(wrap);
+  const padX=parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight);
+  const padY=parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom);
+  const border=2;  // canvas border, 1px each side
+  // Measure as if there were no scrollbars, then reserve room for the one we will create
+  const availW=wrap.clientWidth +(wrap.offsetWidth -wrap.clientWidth )-padX-border;
+  const availH=wrap.clientHeight+(wrap.offsetHeight-wrap.clientHeight)-padY-border;
+  const W=canvas.width, H=canvas.height, sb=_getScrollbarWidth();
+  if(zoomMode==='width'){
+    let sc=availW/W;
+    if(H*sc>availH) sc=(availW-sb)/W;
+    return Math.max(0.01,sc);
+  }
+  if(zoomMode==='height'){
+    let sc=availH/H;
+    if(W*sc>availW) sc=(availH-sb)/H;
+    return Math.max(0.01,sc);
+  }
+  return Math.max(0.01,Math.min(availW/W,availH/H));
+}
+
+function applyZoom(){
+  if(!canvas.width) return;
+  const sc=currentZoomScale();
+  canvas.style.width =Math.round(canvas.width *sc)+'px';
+  canvas.style.height=Math.round(canvas.height*sc)+'px';
+  const pct=Math.round(sc*100)+'%';
+  const lbl=document.getElementById('zoomLabel');
+  if(lbl) lbl.textContent=zoomMode==='fit'?'Fit '+pct:zoomMode==='width'?'W '+pct:zoomMode==='height'?'H '+pct:pct;
+  const act={fit:'zoomFitBtn',width:'zoomWidthBtn',height:'zoomHeightBtn'}[zoomMode]
+          ||(Math.abs(sc-1)<1e-6?'zoom100Btn':null);
+  ['zoomFitBtn','zoomWidthBtn','zoomHeightBtn','zoom100Btn'].forEach(id=>{
+    const b=document.getElementById(id); if(b) b.classList.toggle('active',id===act);
+  });
+}
+
+function setZoomMode(mode){
+  zoomMode=mode;
+  applyZoom();
+  const wrap=document.getElementById('canvasWrap');
+  wrap.scrollLeft=0; wrap.scrollTop=0;
+}
+
+// Zoom to an absolute scale, keeping the photo point under (clientX,clientY) fixed.
+// Without a point, the centre of the visible area is kept fixed.
+function setZoom(level,clientX,clientY){
+  if(!canvas.width) return;
+  const wrap=document.getElementById('canvasWrap');
+  const old=currentZoomScale();
+  level=Math.min(ZOOM_STEPS[ZOOM_STEPS.length-1],Math.max(ZOOM_STEPS[0],level));
+  const wr=wrap.getBoundingClientRect();
+  if(clientX===undefined){ clientX=wr.left+wrap.clientWidth/2; clientY=wr.top+wrap.clientHeight/2; }
+  const cr=canvas.getBoundingClientRect();
+  const px=(clientX-cr.left)/old, py=(clientY-cr.top)/old;   // photo coords under the point
+  zoomMode='custom'; zoomLevel=level;
+  applyZoom();
+  const nr=canvas.getBoundingClientRect();
+  wrap.scrollLeft+=(nr.left+px*level)-clientX;
+  wrap.scrollTop +=(nr.top +py*level)-clientY;
+}
+
+function zoomStep(dir,clientX,clientY){
+  const cur=currentZoomScale();
+  let next;
+  if(dir>0) next=ZOOM_STEPS.find(z=>z>cur*1.001)??ZOOM_STEPS[ZOOM_STEPS.length-1];
+  else      next=[...ZOOM_STEPS].reverse().find(z=>z<cur*0.999)??ZOOM_STEPS[0];
+  setZoom(next,clientX,clientY);
+}
+
+function setupZoomControls(){
+  const wrap=document.getElementById('canvasWrap');
+  // Ctrl/⌘ + wheel (and trackpad pinch, which browsers send as ctrl+wheel) zooms at the cursor
+  wrap.addEventListener('wheel',e=>{
+    if(!(e.ctrlKey||e.metaKey)||!canvas.width) return;
+    e.preventDefault();
+    zoomStep(e.deltaY<0?1:-1,e.clientX,e.clientY);
+  },{passive:false});
+  // Fit modes follow the window / sidebar size
+  if(window.ResizeObserver) new ResizeObserver(()=>{ if(zoomMode!=='custom') applyZoom(); }).observe(wrap);
+  else window.addEventListener('resize',()=>{ if(zoomMode!=='custom') applyZoom(); });
+}
+
 function drawPhoto(p){
   if(!p||!p.img) return;
   _ovActionBtns=null;
-  const maxW=document.getElementById('canvasWrap').clientWidth-40;
-  const scale=Math.min(1,maxW/p.img.naturalWidth);
   canvas.width=p.img.naturalWidth; canvas.height=p.img.naturalHeight;
-  canvas.style.width=Math.round(p.img.naturalWidth*scale)+'px';
-  canvas.style.height=Math.round(p.img.naturalHeight*scale)+'px';
+  applyZoom();
   ctx.clearRect(0,0,canvas.width,canvas.height);
   drawBasePhoto(ctx,p);
 
@@ -3058,8 +3208,8 @@ function openInlineEdit(key, p, pos, bW, bH){
   const wRect = wrap.getBoundingClientRect();
 
   // Position the inline editor over the text box
-  const edX = rect.left - wRect.left + pos.x * scaleX;
-  const edY = rect.top  - wRect.top  + pos.y * scaleY;
+  const edX = rect.left - wRect.left + wrap.scrollLeft + pos.x * scaleX;
+  const edY = rect.top  - wRect.top  + wrap.scrollTop  + pos.y * scaleY;
 
   const editor = document.getElementById('inlineEditor');
   const ta     = document.getElementById('ieTextarea');
@@ -3766,6 +3916,7 @@ async function exportAllPdf(){
     if(typeof window.jspdf==='undefined'){
       await new Promise((resolve,reject)=>{
         const s=document.createElement('script');
+        // jsPDF (MIT) — github.com/parallax/jsPDF
         s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
         s.onload=resolve; s.onerror=()=>reject(new Error('Failed to load jsPDF'));
         document.head.appendChild(s);
@@ -5288,6 +5439,7 @@ async function loadJSZip(){
   if(typeof JSZip !== 'undefined') return JSZip;
   return new Promise((resolve,reject)=>{
     const s=document.createElement('script');
+    // JSZip (MIT / GPLv3 dual licence, used under MIT) — github.com/Stuk/jszip
     s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
     s.onload=()=>resolve(JSZip);
     s.onerror=()=>reject(new Error('Failed to load JSZip'));
@@ -5565,10 +5717,14 @@ function _doOpenEditCrop(file){
 //  Each photo carries p.blurRegions = [{x,y,w,h,shape,kind}]
 //  in natural-image pixels. kind: 'face'|'plate'|'manual'.
 // ══════════════════════════════════════════════════════════
+// MediaPipe Tasks Vision (Apache-2.0, Google) — github.com/google-ai-edge/mediapipe
+// BlazeFace + EfficientDet-Lite2 models (Apache-2.0), hosted by Google.
 const MP_VISION_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MP_FACE_MODEL  = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
 const MP_OBJ_MODEL   = 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite';
-// Licence-plate detector: YOLOv9-t from github.com/ankandrew/open-image-models (MIT).
+// Licence-plate detector: YOLOv9-t from github.com/ankandrew/open-image-models
+// (MIT, Copyright (c) 2024 ankandrew — see models/LICENSE-open-image-models.txt).
+// Run with ONNX Runtime Web (MIT, Microsoft) — github.com/microsoft/onnxruntime
 // Served from this repo; the jsDelivr mirror covers opening index.html from disk.
 const ORT_BASE       = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 const PLATE_MODEL_URLS = [
@@ -5824,7 +5980,9 @@ function _detectPersons(obj,work){
 }
 
 // Letterbox a region to PLATE_INPUT², run the YOLO model, map boxes back.
-// Model output rows: [batch, x1, y1, x2, y2, class, score]
+// Pre-processing (RGB, /255, grey-114 letterbox) and the end-to-end output
+// layout [batch, x1, y1, x2, y2, class, score] follow the open-image-models
+// YOLOv9 export; written here from scratch, not copied.
 async function _detectPlatesIn(session,work,t){
   const N=PLATE_INPUT, r=Math.min(N/t.w,N/t.h);
   const nw=Math.round(t.w*r), nh=Math.round(t.h*r), px=Math.floor((N-nw)/2), py=Math.floor((N-nh)/2);
