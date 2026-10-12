@@ -759,6 +759,29 @@
           oninput="watermarkScalePct=parseInt(this.value);document.getElementById('wmSzVal').textContent=this.value;document.getElementById('wmSzInput').value=this.value;refreshCanvas()">
       </div></div>
     </div>
+    <!-- ══ PRIVACY BLUR ══ --><div class="sidebar-section collapsed">
+      <div class="section-label" onclick="toggleSidebarSection(this)"><span>🕶 Privacy Blur</span><span class="section-caret">▾</span></div>
+      <div class="section-body">      <p class="notice">Automatically finds people's faces and vehicle number plates and blurs them. The blur is baked into every JPG / ZIP / PDF export. Detection runs in your browser (first use downloads ~8&nbsp;MB of models).</p>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer"><input type="checkbox" id="privacyAuto" checked onchange="setPrivacyOption('auto',this.checked)"> Auto-blur new photos on load</label>
+      <div style="display:flex;gap:12px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="privacyFaces" checked onchange="setPrivacyOption('faces',this.checked)"> Faces</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="privacyPlates" checked onchange="setPrivacyOption('plates',this.checked)"> Number plates</label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <label style="flex:1;margin:0">Blur strength <span id="privacyStrengthVal">50</span>%</label>
+      </div>
+      <input type="range" id="privacyStrength" min="10" max="100" value="50" style="width:100%" oninput="setPrivacyOption('strength',parseInt(this.value))">
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="detectPrivacyCurrent()">🔍 Detect this photo</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="detectPrivacyAll()">🔍 Detect all photos</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" style="flex:1" id="btnBlurDraw" onclick="toggleBlurDrawMode()">▭ Edit blur boxes</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="clearPrivacyCurrent()">✕ Clear this photo</button>
+      </div>
+      <p class="notice" style="margin-top:6px">In <b>Edit blur boxes</b> mode: drag on the photo to add a blur box, right-click a box to remove it.</p>
+      <div id="privacyStatus" style="font-size:.72rem;color:var(--muted);margin-top:6px;min-height:1em"></div></div>
+    </div>
 <div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>💾 Export</span><span class="section-caret">▾</span></div>
       <div class="section-body">
@@ -1292,6 +1315,7 @@ function loadFiles(files){
         photo.img=img;
         photo.pos=defaultLabelPos(img.naturalWidth,img.naturalHeight);
         renderThumbs();
+        privacyOnPhotoLoaded(photo);
         if(current===-1) selectPhoto(0);
       };
       img.src=ev.target.result;
@@ -1805,7 +1829,7 @@ function drawPhoto(p){
   canvas.style.width=Math.round(p.img.naturalWidth*scale)+'px';
   canvas.style.height=Math.round(p.img.naturalHeight*scale)+'px';
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(p.img,0,0);
+  drawBasePhoto(ctx,p);
 
   const pos=p.pos||defaultLabelPos(canvas.width,canvas.height);
   const fs=fontSize;
@@ -1838,6 +1862,7 @@ function drawPhoto(p){
   drawAllStrokes(ctx,p);
   drawWatermark(ctx, canvas.width, canvas.height);
   drawOverlay(ctx,p,false);
+  drawBlurRegionOutlines(ctx,p);
 }
 
 /* ── Draw leader + circle + anchor ────────────────────── */
@@ -2824,6 +2849,7 @@ function setupCanvasDrag(){
 }
 
 function onMouseDown(e){
+  if(blurDrawMode) return blurMouseDown(e);
   if(activeTool==='select') return onDragStart(e);
   if(current<0) return;
   const p=photos[current];
@@ -2839,6 +2865,7 @@ function onMouseDown(e){
 }
 
 function onMouseMove(e){
+  if(blurDrawMode) return blurMouseMove(e);
   // Update hover position for show-on-hover handles
   const hPos=canvasXY(e);
   hoverX=hPos.x; hoverY=hPos.y;
@@ -2861,6 +2888,7 @@ function onMouseMove(e){
 }
 
 function onMouseUp(e){
+  if(blurDrawMode) return blurMouseUp(e);
   if(activeTool==='select') return onDragEnd(e);
   if(current<0) return;
   const p=photos[current];
@@ -3104,6 +3132,7 @@ function closeInlineEdit(){
 
 function onRightClick(e){
   e.preventDefault();
+  if(blurDrawMode) return blurRightClick(e);
   if(activeTool!=='select'||current<0) return;
   const p=photos[current];
   if(!strokes[p.file.name]) return;
@@ -3332,7 +3361,8 @@ function _snapshotState() {
       state: JSON.parse(JSON.stringify(ov.state))
     })),
     activeOvIdx: activeOvIdx[fname]||0,
-    strokes: JSON.parse(JSON.stringify(strokes[fname]||[]))
+    strokes: JSON.parse(JSON.stringify(strokes[fname]||[])),
+    blurRegions: JSON.parse(JSON.stringify(p.blurRegions||[]))
   };
 }
 
@@ -3350,6 +3380,7 @@ function _restoreSnapshot(snap) {
   }));
   activeOvIdx[snap.fname] = snap.activeOvIdx;
   strokes[snap.fname] = JSON.parse(JSON.stringify(snap.strokes));
+  p.blurRegions = JSON.parse(JSON.stringify(snap.blurRegions||[]));
   const di=document.getElementById('descInput'); if(di) di.value=p.desc;
   syncSlidersToCurrentPhoto();
   renderOvSwitcher(); renderOverlayMgrList(); renderThumbs();
@@ -4128,7 +4159,7 @@ async function exportAllPdf(){
       // ── Step 1: photo-only canvas → JPEG background ────────────────────
       const oc=document.createElement('canvas'),ox=oc.getContext('2d');
       oc.width=w; oc.height=h;
-      ox.drawImage(p.img,0,0);
+      drawBasePhoto(ox,p);
       const photoImgData=oc.toDataURL('image/jpeg',0.92);
 
       // ── Step 2: create PDF page ────────────────────────────────────────
@@ -4275,7 +4306,7 @@ async function shareCurrentJPG(){
   // Render to canvas
   const oc=document.createElement('canvas'),ox=oc.getContext('2d');
   oc.width=p.img.naturalWidth; oc.height=p.img.naturalHeight;
-  ox.drawImage(p.img,0,0);
+  drawBasePhoto(ox,p);
   renderLabelsToCtx(ox,p);
   renderOverlayToCtx(ox,p);
   const blob=await new Promise(res=>oc.toBlob(res,'image/jpeg',0.92));
@@ -4313,7 +4344,7 @@ async function shareCurrentJPG(){
 async function exportPhotoJPGToFolder(p,photoIdx){
   const oc=document.createElement('canvas'),ox=oc.getContext('2d');
   oc.width=p.img.naturalWidth; oc.height=p.img.naturalHeight;
-  ox.drawImage(p.img,0,0);
+  drawBasePhoto(ox,p);
   renderLabelsToCtx(ox,p);
   renderOverlayToCtx(ox,p);
   const fname=buildExportFilename(p,photoIdx);
@@ -4324,7 +4355,7 @@ function exportPhotoJPG(p){
   const photoIdx=photos.indexOf(p);
   const oc=document.createElement('canvas'),ox=oc.getContext('2d');
   oc.width=p.img.naturalWidth; oc.height=p.img.naturalHeight;
-  ox.drawImage(p.img,0,0);
+  drawBasePhoto(ox,p);
   renderLabelsToCtx(ox,p);
   renderOverlayToCtx(ox,p);
   const link=document.createElement('a');
@@ -4573,6 +4604,7 @@ async function runLoadSlides(){
         photo.img=img;
         photo.pos=defaultLabelPos(img.naturalWidth,img.naturalHeight);
         loadedCount++;
+        privacyOnPhotoLoaded(photo);
         const pct=Math.round(loadedCount/total*100);
         bar.style.width=pct+'%';
         status.textContent=`Loading ${loadedCount}/${total}: ${file.name}`;
@@ -5210,6 +5242,9 @@ function replaceSlideImage(idx, file){
         p.pos = defaultLabelPos(img.naturalWidth, img.naturalHeight);
       }
       p.desc = oldDesc;
+      p.blurRegions = [];
+      p.blurScanned = false;
+      privacyOnPhotoLoaded(p);
 
       // Re-extract EXIF date
       extractExifDate(file).then(d=>{
@@ -5279,7 +5314,7 @@ async function exportZIP(){
       if(!p.img) continue;
       const oc=document.createElement('canvas'),ox=oc.getContext('2d');
       oc.width=p.img.naturalWidth; oc.height=p.img.naturalHeight;
-      ox.drawImage(p.img,0,0);
+      drawBasePhoto(ox,p);
       renderLabelsToCtx(ox,p);
       renderOverlayToCtx(ox,p);
       const blob=await new Promise(res=>oc.toBlob(res,'image/jpeg',0.92));
@@ -5523,6 +5558,374 @@ function _doOpenEditCrop(file){
   reader.readAsDataURL(file);
 }
 
+</script>
+<script>
+// ══════════════════════════════════════════════════════════
+//  PRIVACY BLUR — auto-detect & blur faces and number plates
+//  Each photo carries p.blurRegions = [{x,y,w,h,shape,kind}]
+//  in natural-image pixels. kind: 'face'|'plate'|'manual'.
+// ══════════════════════════════════════════════════════════
+const MP_VISION_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MP_FACE_MODEL  = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
+const MP_OBJ_MODEL   = 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite';
+const PRIVACY_VEHICLES = ['car','truck','bus','motorcycle'];
+const PRIVACY_WORK_MAX = 2048;   // longest side used for detection
+
+let privacyAuto     = true;
+let privacyFaces    = true;
+let privacyPlates   = true;
+let privacyStrength = 50;
+let blurDrawMode    = false;
+let _blurDraft      = null;
+let _privacyDetectors = null;
+let _privacyQueue   = Promise.resolve();
+let _privacyPending = 0;
+let _privacyLastErr = null;
+
+(function _loadPrivacyPrefs(){
+  try{
+    const o=JSON.parse(localStorage.getItem('privacyBlurPrefs')||'null');
+    if(!o) return;
+    if(typeof o.auto==='boolean')     privacyAuto=o.auto;
+    if(typeof o.faces==='boolean')    privacyFaces=o.faces;
+    if(typeof o.plates==='boolean')   privacyPlates=o.plates;
+    if(typeof o.strength==='number')  privacyStrength=o.strength;
+  }catch(e){}
+  const sync=()=>{
+    const g=id=>document.getElementById(id);
+    if(g('privacyAuto'))   g('privacyAuto').checked=privacyAuto;
+    if(g('privacyFaces'))  g('privacyFaces').checked=privacyFaces;
+    if(g('privacyPlates')) g('privacyPlates').checked=privacyPlates;
+    if(g('privacyStrength')){ g('privacyStrength').value=privacyStrength; g('privacyStrengthVal').textContent=privacyStrength; }
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',sync); else sync();
+})();
+
+function setPrivacyOption(key,val){
+  if(key==='auto')     privacyAuto=val;
+  if(key==='faces')    privacyFaces=val;
+  if(key==='plates')   privacyPlates=val;
+  if(key==='strength'){ privacyStrength=val; document.getElementById('privacyStrengthVal').textContent=val; refreshCanvas(); }
+  try{ localStorage.setItem('privacyBlurPrefs',JSON.stringify({auto:privacyAuto,faces:privacyFaces,plates:privacyPlates,strength:privacyStrength})); }catch(e){}
+}
+
+function _privacyStatus(msg){
+  const el=document.getElementById('privacyStatus');
+  if(el) el.textContent=msg;
+}
+
+/* ── Rendering ──────────────────────────────────────────── */
+function drawBasePhoto(tCtx,p){
+  tCtx.drawImage(p.img,0,0);
+  applyPrivacyBlur(tCtx,p);
+}
+
+function applyPrivacyBlur(tCtx,p){
+  const regs=p&&p.blurRegions;
+  if(!regs||!regs.length||!p.img) return;
+  const W=p.img.naturalWidth, H=p.img.naturalHeight;
+  for(const r of regs){
+    const x=Math.max(0,Math.floor(r.x)), y=Math.max(0,Math.floor(r.y));
+    const w=Math.min(W,Math.ceil(r.x+r.w))-x, h=Math.min(H,Math.ceil(r.y+r.h))-y;
+    if(w<2||h<2) continue;
+    // Downscale hard then upscale with smoothing → heavy, irreversible blur
+    const cell=Math.max(3,Math.min(w,h)*(0.03+0.27*privacyStrength/100));
+    const sw=Math.max(1,Math.round(w/cell)), sh=Math.max(1,Math.round(h/cell));
+    const tiny=document.createElement('canvas'); tiny.width=sw; tiny.height=sh;
+    const tx=tiny.getContext('2d'); tx.imageSmoothingEnabled=true; tx.imageSmoothingQuality='high';
+    tx.drawImage(p.img,x,y,w,h,0,0,sw,sh);
+    const mid=document.createElement('canvas'); mid.width=Math.min(w,sw*4); mid.height=Math.min(h,sh*4);
+    const mx=mid.getContext('2d'); mx.imageSmoothingEnabled=true; mx.imageSmoothingQuality='high';
+    mx.drawImage(tiny,0,0,mid.width,mid.height);
+    tCtx.save();
+    tCtx.beginPath();
+    if(r.shape==='ellipse') tCtx.ellipse(x+w/2,y+h/2,w/2,h/2,0,0,Math.PI*2);
+    else tCtx.rect(x,y,w,h);
+    tCtx.clip();
+    tCtx.imageSmoothingEnabled=true; tCtx.imageSmoothingQuality='high';
+    tCtx.drawImage(mid,x,y,w,h);
+    tCtx.restore();
+  }
+}
+
+// Dashed outlines of blur boxes — on-screen only, while editing
+function drawBlurRegionOutlines(tCtx,p){
+  if(!blurDrawMode||!p) return;
+  const lw=Math.max(2,Math.round(p.img.naturalWidth/600));
+  tCtx.save();
+  tCtx.lineWidth=lw; tCtx.setLineDash([lw*4,lw*3]);
+  const draw=(r,col)=>{
+    tCtx.strokeStyle=col; tCtx.beginPath();
+    if(r.shape==='ellipse') tCtx.ellipse(r.x+r.w/2,r.y+r.h/2,r.w/2,r.h/2,0,0,Math.PI*2);
+    else tCtx.rect(r.x,r.y,r.w,r.h);
+    tCtx.stroke();
+  };
+  (p.blurRegions||[]).forEach(r=>draw(r, r.kind==='manual'?'#58a6ff':'#f85149'));
+  if(_blurDraft) draw(_normRect(_blurDraft),'#ffff00');
+  tCtx.restore();
+}
+
+/* ── Manual editing ─────────────────────────────────────── */
+function toggleBlurDrawMode(){
+  blurDrawMode=!blurDrawMode;
+  _blurDraft=null;
+  const b=document.getElementById('btnBlurDraw');
+  if(b){ b.classList.toggle('btn-primary',blurDrawMode); b.classList.toggle('btn-secondary',!blurDrawMode); b.textContent=blurDrawMode?'✓ Done editing':'▭ Edit blur boxes'; }
+  canvas.style.cursor=blurDrawMode?'cell':'crosshair';
+  refreshCanvas();
+}
+function _normRect(d){
+  return {x:Math.min(d.x0,d.x1),y:Math.min(d.y0,d.y1),w:Math.abs(d.x1-d.x0),h:Math.abs(d.y1-d.y0),shape:'rect'};
+}
+function blurMouseDown(e){
+  if(current<0) return;
+  const{x,y}=canvasXY(e);
+  _blurDraft={x0:x,y0:y,x1:x,y1:y};
+}
+function blurMouseMove(e){
+  if(!_blurDraft||current<0) return;
+  const{x,y}=canvasXY(e);
+  _blurDraft.x1=x; _blurDraft.y1=y;
+  drawPhoto(photos[current]);
+}
+function blurMouseUp(e){
+  if(!_blurDraft||current<0){ _blurDraft=null; return; }
+  const p=photos[current];
+  const r=_normRect(_blurDraft);
+  _blurDraft=null;
+  if(r.w>=6&&r.h>=6){
+    pushUndo();
+    (p.blurRegions=p.blurRegions||[]).push({...r,kind:'manual'});
+  }
+  refreshCanvas();
+}
+function blurRightClick(e){
+  if(current<0) return;
+  const p=photos[current];
+  const{x,y}=canvasXY(e);
+  const regs=p.blurRegions||[];
+  // Remove the smallest box under the cursor
+  let best=-1,bestA=Infinity;
+  regs.forEach((r,i)=>{
+    if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h&&r.w*r.h<bestA){best=i;bestA=r.w*r.h;}
+  });
+  if(best>=0){ pushUndo(); regs.splice(best,1); refreshCanvas(); }
+}
+function clearPrivacyCurrent(){
+  if(current<0) return;
+  const p=photos[current];
+  if(!p.blurRegions||!p.blurRegions.length) return;
+  pushUndo();
+  p.blurRegions=[];
+  refreshCanvas();
+  _privacyStatus('Cleared blur boxes on this photo.');
+}
+
+/* ── Detection ──────────────────────────────────────────── */
+function _loadPrivacyDetectors(){
+  if(!_privacyDetectors){
+    _privacyDetectors=(async()=>{
+      _privacyStatus('Loading detection models…');
+      const v=await import(MP_VISION_BASE+'/vision_bundle.mjs');
+      const fileset=await v.FilesetResolver.forVisionTasks(MP_VISION_BASE+'/wasm');
+      const [face,obj]=await Promise.all([
+        v.FaceDetector.createFromOptions(fileset,{
+          baseOptions:{modelAssetPath:MP_FACE_MODEL},runningMode:'IMAGE',minDetectionConfidence:0.6
+        }),
+        v.ObjectDetector.createFromOptions(fileset,{
+          baseOptions:{modelAssetPath:MP_OBJ_MODEL},runningMode:'IMAGE',
+          scoreThreshold:0.3,maxResults:50,categoryAllowlist:['person',...PRIVACY_VEHICLES]
+        })
+      ]);
+      return {face,obj};
+    })().catch(err=>{ _privacyDetectors=null; throw err; });
+  }
+  return _privacyDetectors;
+}
+
+function _iou(a,b){
+  const x0=Math.max(a.x,b.x),y0=Math.max(a.y,b.y),x1=Math.min(a.x+a.w,b.x+b.w),y1=Math.min(a.y+a.h,b.y+b.h);
+  const inter=Math.max(0,x1-x0)*Math.max(0,y1-y0);
+  const minA=Math.min(a.w*a.h,b.w*b.h);
+  return {iou:inter/(a.w*a.h+b.w*b.h-inter||1), cover:inter/(minA||1)};
+}
+// Keep highest-score boxes; drop ones that overlap or sit inside a kept box
+function _nms(boxes){
+  boxes.sort((a,b)=>b.score-a.score);
+  const keep=[];
+  for(const b of boxes){
+    if(!keep.some(k=>{const o=_iou(k,b); return o.iou>0.45||o.cover>0.8;})) keep.push(b);
+  }
+  return keep;
+}
+
+function _detectObjects(obj,work){
+  const W=work.width,H=work.height;
+  const tiles=[{x:0,y:0,w:W,h:H}];
+  // Overlapping 2×2 tiles help with small, distant people / cars
+  if(Math.max(W,H)>900){
+    const tw=Math.round(W*0.6),th=Math.round(H*0.6);
+    for(const tx of [0,W-tw]) for(const ty of [0,H-th]) tiles.push({x:tx,y:ty,w:tw,h:th});
+  }
+  const out={person:[],vehicle:[]};
+  for(const t of tiles){
+    let src=work;
+    if(t.w!==W||t.h!==H){
+      src=document.createElement('canvas'); src.width=t.w; src.height=t.h;
+      src.getContext('2d').drawImage(work,t.x,t.y,t.w,t.h,0,0,t.w,t.h);
+    }
+    const res=obj.detect(src);
+    for(const d of res.detections){
+      const c=d.categories[0]; if(!c) continue;
+      const bb=d.boundingBox;
+      const box={x:bb.originX+t.x,y:bb.originY+t.y,w:bb.width,h:bb.height,score:c.score};
+      if(c.categoryName==='person') out.person.push(box);
+      else if(PRIVACY_VEHICLES.includes(c.categoryName)) out.vehicle.push({...box,cls:c.categoryName});
+    }
+  }
+  out.person=_nms(out.person);
+  out.vehicle=_nms(out.vehicle);
+  return out;
+}
+
+function _detectFaces(face,work,persons){
+  const W=work.width,H=work.height;
+  const faces=[];
+  const run=(sx,sy,sw,sh)=>{
+    sx=Math.max(0,Math.round(sx)); sy=Math.max(0,Math.round(sy));
+    sw=Math.min(W-sx,Math.round(sw)); sh=Math.min(H-sy,Math.round(sh));
+    if(sw<8||sh<8) return [];
+    const S=256, sc=S/Math.max(sw,sh);
+    const c=document.createElement('canvas'); c.width=Math.round(sw*sc); c.height=Math.round(sh*sc);
+    c.getContext('2d').drawImage(work,sx,sy,sw,sh,0,0,c.width,c.height);
+    return face.detect(c).detections.map(d=>{
+      const b=d.boundingBox;
+      return {x:sx+b.originX/sc,y:sy+b.originY/sc,w:b.width/sc,h:b.height/sc,score:d.categories[0]?.score||0.5};
+    });
+  };
+  // Large faces in the whole frame
+  faces.push(...run(0,0,W,H));
+  // Head area of each detected person
+  for(const p of persons){
+    const side=Math.max(p.w,p.h*0.45);
+    const found=run(p.x+p.w/2-side/2,p.y-side*0.1,side,side);
+    if(found.length) faces.push(...found);
+    else if(p.h>=20&&p.score>=0.5){
+      // No face visible (turned away / too small) → blur the head region anyway
+      const hw=Math.min(p.w*0.6,p.h*0.22), hh=hw*1.25;
+      faces.push({x:p.x+p.w/2-hw/2,y:p.y,w:hw,h:hh,score:0.1});
+    }
+  }
+  return _nms(faces);
+}
+
+// Plates: within the lower part of each vehicle, find the window with the
+// densest vertical edges (characters on a plate) at a plate-like aspect.
+function _findPlate(work,v){
+  const top=v.y+v.h*0.35, rh=v.h*0.65, rw=v.w;
+  if(rw<24||rh<10) return null;
+  const GW=Math.min(320,Math.max(64,Math.round(rw))), sc=GW/rw, GH=Math.max(8,Math.round(rh*sc));
+  const c=document.createElement('canvas'); c.width=GW; c.height=GH;
+  const cx=c.getContext('2d',{willReadFrequently:true});
+  cx.drawImage(work,v.x,top,rw,rh,0,0,GW,GH);
+  const px=cx.getImageData(0,0,GW,GH).data;
+  const g=new Float32Array(GW*GH);
+  for(let i=0;i<GW*GH;i++) g[i]=px[i*4]*0.299+px[i*4+1]*0.587+px[i*4+2]*0.114;
+  // Integral image of binarised vertical edges
+  const I=new Float32Array((GW+1)*(GH+1));
+  for(let y=0;y<GH;y++){
+    let row=0;
+    for(let x=0;x<GW;x++){
+      const e=(x>0&&x<GW-1&&Math.abs(g[y*GW+x+1]-g[y*GW+x-1])>40)?1:0;
+      row+=e;
+      I[(y+1)*(GW+1)+x+1]=I[y*(GW+1)+x+1]+row;
+    }
+  }
+  const sum=(x,y,w,h)=>I[(y+h)*(GW+1)+x+w]-I[y*(GW+1)+x+w]-I[(y+h)*(GW+1)+x]+I[y*(GW+1)+x];
+  const isMoto=v.cls==='motorcycle';
+  const widths=isMoto?[0.3,0.45]:[0.18,0.25,0.33];
+  const aspects=isMoto?[1.6,2.2]:[2,3.2,4.5];
+  let best=null;
+  for(const wf of widths) for(const ar of aspects){
+    const ww=Math.max(6,Math.round(GW*wf)), wh=Math.max(3,Math.round(ww/ar));
+    if(ww>GW||wh>GH) continue;
+    for(let y=0;y+wh<=GH;y+=2) for(let x=0;x+ww<=GW;x+=2){
+      const dx=Math.abs((x+ww/2)/GW-0.5)*2;
+      const s=sum(x,y,ww,wh)/(ww*wh)*(1-0.35*dx);
+      if(!best||s>best.s) best={s,x,y,w:ww,h:wh};
+    }
+  }
+  if(!best||best.s<0.06) return null;
+  return {x:v.x+best.x/sc,y:top+best.y/sc,w:best.w/sc,h:best.h/sc};
+}
+
+async function detectPrivacyRegions(p){
+  const {face,obj}=await _loadPrivacyDetectors();
+  const W=p.img.naturalWidth,H=p.img.naturalHeight;
+  const s=Math.min(1,PRIVACY_WORK_MAX/Math.max(W,H));
+  const work=document.createElement('canvas');
+  work.width=Math.round(W*s); work.height=Math.round(H*s);
+  work.getContext('2d').drawImage(p.img,0,0,work.width,work.height);
+
+  const objs=_detectObjects(obj,work);
+  const regions=[];
+  const pad=(b,f)=>({x:b.x-b.w*f,y:b.y-b.h*f,w:b.w*(1+2*f),h:b.h*(1+2*f)});
+  const toImg=b=>({x:b.x/s,y:b.y/s,w:b.w/s,h:b.h/s});
+  if(privacyFaces){
+    for(const f of _detectFaces(face,work,objs.person))
+      regions.push({...toImg(pad(f,0.25)),shape:'ellipse',kind:'face'});
+  }
+  if(privacyPlates){
+    for(const v of objs.vehicle){
+      const pl=_findPlate(work,v);
+      if(pl) regions.push({...toImg(pad(pl,0.3)),shape:'rect',kind:'plate'});
+    }
+  }
+  return regions;
+}
+
+// Serialise scans so the models are only used by one photo at a time
+function queuePrivacyScan(p){
+  _privacyPending++;
+  const job=_privacyQueue.then(async()=>{
+    if(!p.img||!photos.includes(p)) return;
+    const idx=photos.indexOf(p);
+    _privacyStatus(`Scanning ${idx+1}/${photos.length}: ${p.file.name}…`);
+    const found=await detectPrivacyRegions(p);
+    // Replace previous auto boxes, keep manual ones
+    p.blurRegions=(p.blurRegions||[]).filter(r=>r.kind==='manual').concat(found);
+    p.blurScanned=true;
+    const nf=found.filter(r=>r.kind==='face').length, np=found.filter(r=>r.kind==='plate').length;
+    _privacyStatus(`✓ ${p.title}: ${nf} face(s), ${np} plate(s) blurred.`);
+    if(photos[current]===p) refreshCanvas();
+  }).catch(err=>{
+    console.error('Privacy blur failed:',err);
+    _privacyLastErr=err;
+    _privacyStatus('⚠ Auto-blur failed: '+(err&&err.message||err)+' (internet connection needed for the first run).');
+  }).finally(()=>{ _privacyPending--; });
+  _privacyQueue=job;
+  return job;
+}
+
+function privacyOnPhotoLoaded(p){
+  if(!p.blurRegions) p.blurRegions=[];
+  if(privacyAuto&&(privacyFaces||privacyPlates)&&!p.blurScanned) queuePrivacyScan(p);
+}
+
+function detectPrivacyCurrent(){
+  if(current<0) return alert('No photo selected.');
+  if(!privacyFaces&&!privacyPlates) return alert('Tick Faces and/or Number plates first.');
+  pushUndo();
+  queuePrivacyScan(photos[current]);
+}
+async function detectPrivacyAll(){
+  if(!photos.length) return alert('No photos loaded.');
+  if(!privacyFaces&&!privacyPlates) return alert('Tick Faces and/or Number plates first.');
+  _privacyLastErr=null;
+  photos.filter(p=>p.img).forEach(p=>queuePrivacyScan(p));
+  await _privacyQueue;
+  if(!_privacyPending&&!_privacyLastErr) _privacyStatus(`✓ Scanned ${photos.length} photo(s).`);
+}
 </script>
 <script>
 // ══════════════════════════════════════════════════════════
