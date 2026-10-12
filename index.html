@@ -764,16 +764,16 @@
     </div>
     <!-- ══ PRIVACY BLUR ══ --><div class="sidebar-section collapsed">
       <div class="section-label" onclick="toggleSidebarSection(this)"><span>🕶 Privacy Blur</span><span class="section-caret">▾</span></div>
-      <div class="section-body">      <p class="notice">Automatically finds people's faces and vehicle number plates and blurs them. The blur is baked into every JPG / ZIP / PDF export. Detection runs in your browser (first use downloads ~20&nbsp;MB of models).</p>
+      <div class="section-body">      <p class="notice">Automatically finds people's faces and vehicle number plates and blurs them. The blur is baked into every JPG / ZIP / PDF export. Detection runs in your browser (first use downloads ~16&nbsp;MB of models).</p>
       <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer"><input type="checkbox" id="privacyAuto" checked onchange="setPrivacyOption('auto',this.checked)"> Auto-blur new photos on load</label>
       <div style="display:flex;gap:12px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="privacyFaces" checked onchange="setPrivacyOption('faces',this.checked)"> Faces</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="privacyPlates" checked onchange="setPrivacyOption('plates',this.checked)"> Number plates</label>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-        <label style="flex:1;margin:0">Blur strength <span id="privacyStrengthVal">50</span>%</label>
+        <label style="flex:1;margin:0">Pixel size <span id="privacyStrengthVal">60</span>%</label>
       </div>
-      <input type="range" id="privacyStrength" min="10" max="100" value="50" style="width:100%" oninput="setPrivacyOption('strength',parseInt(this.value))">
+      <input type="range" id="privacyStrength" min="10" max="100" value="60" style="width:100%" oninput="setPrivacyOption('strength',parseInt(this.value))">
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="detectPrivacyCurrent()">🔍 Detect this photo</button>
         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="detectPrivacyAll()">🔍 Detect all photos</button>
@@ -1042,12 +1042,16 @@
    jsPDF 2.5.1            — PDF export.            MIT. github.com/parallax/jsPDF
    svg2pdf.js 2.2.3       — SVG → PDF for export.  MIT. github.com/yWorks/svg2pdf.js
    JSZip 3.10.1           — ZIP export.            MIT (dual MIT/GPLv3). github.com/Stuk/jszip
-   MediaPipe Tasks Vision — face + person detection for Privacy Blur.
-     0.10.14                Apache-2.0. github.com/google-ai-edge/mediapipe
-     Models: BlazeFace short-range, EfficientDet-Lite2 (COCO) — Apache-2.0,
-     hosted by Google at storage.googleapis.com/mediapipe-models
-   ONNX Runtime Web 1.20.1 — runs the number plate model. MIT.
+   MediaPipe Tasks Vision — person detection for Privacy Blur (heads of people
+     0.10.14                facing away). Apache-2.0. github.com/google-ai-edge/mediapipe
+     Model: EfficientDet-Lite2 (COCO) — Apache-2.0, hosted by Google at
+     storage.googleapis.com/mediapipe-models
+   ONNX Runtime Web 1.20.1 — runs the face and number plate models. MIT.
                             github.com/microsoft/onnxruntime
+   YuNet face detector (models/face_detection_yunet_2023mar.onnx)
+     — MIT, Copyright (c) 2020 Shiqi Yu. github.com/opencv/opencv_zoo
+       (licence text: models/LICENSE-yunet.txt). Output decoding re-implemented
+       from OpenCV's FaceDetectorYN (Apache-2.0, github.com/opencv/opencv).
    YOLOv9-t licence plate detector (models/yolo-v9-t-640-license-plates-end2end.onnx)
      — MIT, Copyright (c) 2024 ankandrew. github.com/ankandrew/open-image-models
        (licence text: models/LICENSE-open-image-models.txt). Built on the YOLOv9
@@ -5718,9 +5722,9 @@ function _doOpenEditCrop(file){
 //  in natural-image pixels. kind: 'face'|'plate'|'manual'.
 // ══════════════════════════════════════════════════════════
 // MediaPipe Tasks Vision (Apache-2.0, Google) — github.com/google-ai-edge/mediapipe
-// BlazeFace + EfficientDet-Lite2 models (Apache-2.0), hosted by Google.
+// EfficientDet-Lite2 person model (Apache-2.0), hosted by Google. Used only to
+// find people whose face is not visible (turned away) so their head is blurred.
 const MP_VISION_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
-const MP_FACE_MODEL  = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
 const MP_OBJ_MODEL   = 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite';
 // Licence-plate detector: YOLOv9-t from github.com/ankandrew/open-image-models
 // (MIT, Copyright (c) 2024 ankandrew — see models/LICENSE-open-image-models.txt).
@@ -5731,6 +5735,14 @@ const PLATE_MODEL_URLS = [
   'models/yolo-v9-t-640-license-plates-end2end.onnx',
   'https://cdn.jsdelivr.net/gh/joaogoncalvescstp-oss/Field-Photo-Labeler@main/models/yolo-v9-t-640-license-plates-end2end.onnx'
 ];
+// Face detector: YuNet (2023mar) from github.com/opencv/opencv_zoo
+// (MIT, Copyright (c) 2020 Shiqi Yu — see models/LICENSE-yunet.txt).
+const FACE_MODEL_URLS = [
+  'models/face_detection_yunet_2023mar.onnx',
+  'https://cdn.jsdelivr.net/gh/joaogoncalvescstp-oss/Field-Photo-Labeler@main/models/face_detection_yunet_2023mar.onnx'
+];
+const FACE_INPUT     = 640;
+const FACE_MIN_SCORE = 0.65;
 const PLATE_INPUT    = 640;
 const PLATE_MIN_SCORE = 0.3;
 const PRIVACY_WORK_MAX = 2048;   // longest side used for detection
@@ -5738,7 +5750,7 @@ const PRIVACY_WORK_MAX = 2048;   // longest side used for detection
 let privacyAuto     = true;
 let privacyFaces    = true;
 let privacyPlates   = true;
-let privacyStrength = 50;
+let privacyStrength = 60;
 let blurDrawMode    = false;
 let _blurDraft      = null;
 let _privacyDetectors = null;
@@ -5748,7 +5760,7 @@ let _privacyLastErr = null;
 
 (function _loadPrivacyPrefs(){
   try{
-    const o=JSON.parse(localStorage.getItem('privacyBlurPrefs')||'null');
+    const o=JSON.parse(localStorage.getItem('privacyBlurPrefs_v2')||'null');
     if(!o) return;
     if(typeof o.auto==='boolean')     privacyAuto=o.auto;
     if(typeof o.faces==='boolean')    privacyFaces=o.faces;
@@ -5770,7 +5782,7 @@ function setPrivacyOption(key,val){
   if(key==='faces')    privacyFaces=val;
   if(key==='plates')   privacyPlates=val;
   if(key==='strength'){ privacyStrength=val; document.getElementById('privacyStrengthVal').textContent=val; refreshCanvas(); }
-  try{ localStorage.setItem('privacyBlurPrefs',JSON.stringify({auto:privacyAuto,faces:privacyFaces,plates:privacyPlates,strength:privacyStrength})); }catch(e){}
+  try{ localStorage.setItem('privacyBlurPrefs_v2',JSON.stringify({auto:privacyAuto,faces:privacyFaces,plates:privacyPlates,strength:privacyStrength})); }catch(e){}
 }
 
 function _privacyStatus(msg){
@@ -5792,22 +5804,22 @@ function applyPrivacyBlur(tCtx,p){
     const x=Math.max(0,Math.floor(r.x)), y=Math.max(0,Math.floor(r.y));
     const w=Math.min(W,Math.ceil(r.x+r.w))-x, h=Math.min(H,Math.ceil(r.y+r.h))-y;
     if(w<2||h<2) continue;
-    // Downscale hard then upscale with smoothing → heavy, irreversible blur
-    const cell=Math.max(3,Math.min(w,h)*(0.03+0.27*privacyStrength/100));
+    // Pixelate: average each block, then upscale with smoothing OFF → large
+    // solid blocks. Strength sets how many blocks span the short side
+    // (10% → ~14 blocks, 100% → 3 blocks); this cannot be reversed.
+    const blocks=Math.max(3,Math.round(15-12*privacyStrength/100));
+    const cell=Math.max(2,Math.min(w,h)/blocks);
     const sw=Math.max(1,Math.round(w/cell)), sh=Math.max(1,Math.round(h/cell));
     const tiny=document.createElement('canvas'); tiny.width=sw; tiny.height=sh;
     const tx=tiny.getContext('2d'); tx.imageSmoothingEnabled=true; tx.imageSmoothingQuality='high';
     tx.drawImage(p.img,x,y,w,h,0,0,sw,sh);
-    const mid=document.createElement('canvas'); mid.width=Math.min(w,sw*4); mid.height=Math.min(h,sh*4);
-    const mx=mid.getContext('2d'); mx.imageSmoothingEnabled=true; mx.imageSmoothingQuality='high';
-    mx.drawImage(tiny,0,0,mid.width,mid.height);
     tCtx.save();
     tCtx.beginPath();
     if(r.shape==='ellipse') tCtx.ellipse(x+w/2,y+h/2,w/2,h/2,0,0,Math.PI*2);
     else tCtx.rect(x,y,w,h);
     tCtx.clip();
-    tCtx.imageSmoothingEnabled=true; tCtx.imageSmoothingQuality='high';
-    tCtx.drawImage(mid,x,y,w,h);
+    tCtx.imageSmoothingEnabled=false;
+    tCtx.drawImage(tiny,x,y,w,h);
     tCtx.restore();
   }
 }
@@ -5889,22 +5901,50 @@ function clearPrivacyCurrent(){
 function _loadPrivacyDetectors(){
   if(!_privacyDetectors){
     _privacyDetectors=(async()=>{
-      _privacyStatus('Loading face detection models…');
+      _privacyStatus('Loading person detection model…');
       const v=await import(MP_VISION_BASE+'/vision_bundle.mjs');
       const fileset=await v.FilesetResolver.forVisionTasks(MP_VISION_BASE+'/wasm');
-      const [face,obj]=await Promise.all([
-        v.FaceDetector.createFromOptions(fileset,{
-          baseOptions:{modelAssetPath:MP_FACE_MODEL},runningMode:'IMAGE',minDetectionConfidence:0.6
-        }),
-        v.ObjectDetector.createFromOptions(fileset,{
-          baseOptions:{modelAssetPath:MP_OBJ_MODEL},runningMode:'IMAGE',
-          scoreThreshold:0.3,maxResults:50,categoryAllowlist:['person']
-        })
-      ]);
-      return {face,obj};
+      return await v.ObjectDetector.createFromOptions(fileset,{
+        baseOptions:{modelAssetPath:MP_OBJ_MODEL},runningMode:'IMAGE',
+        scoreThreshold:0.3,maxResults:50,categoryAllowlist:['person']
+      });
     })().catch(err=>{ _privacyDetectors=null; throw err; });
   }
   return _privacyDetectors;
+}
+
+function _loadOrt(){
+  if(window.ort) return Promise.resolve();
+  return new Promise((res,rej)=>{
+    const sc=document.createElement('script');
+    sc.src=ORT_BASE+'ort.wasm.min.js';
+    sc.onload=()=>{ ort.env.wasm.wasmPaths=ORT_BASE; res(); };
+    sc.onerror=()=>rej(new Error('could not load onnxruntime-web'));
+    document.head.appendChild(sc);
+  });
+}
+// Try each URL in turn (this repo first, then the jsDelivr mirror)
+async function _loadOnnxModel(urls){
+  await _loadOrt();
+  let lastErr;
+  for(const url of urls){
+    try{
+      const r=await fetch(url);
+      if(!r.ok) throw new Error('HTTP '+r.status+' for '+url);
+      const buf=new Uint8Array(await r.arrayBuffer());
+      return await ort.InferenceSession.create(buf,{executionProviders:['wasm']});
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr;
+}
+
+let _faceSession=null;
+function _loadFaceDetector(){
+  if(!_faceSession){
+    _privacyStatus('Loading face model…');
+    _faceSession=_loadOnnxModel(FACE_MODEL_URLS).catch(err=>{ _faceSession=null; throw err; });
+  }
+  return _faceSession;
 }
 
 let _plateSession=null;
@@ -5912,24 +5952,7 @@ function _loadPlateDetector(){
   if(!_plateSession){
     _plateSession=(async()=>{
       _privacyStatus('Loading number plate model…');
-      if(!window.ort){
-        await new Promise((res,rej)=>{
-          const sc=document.createElement('script');
-          sc.src=ORT_BASE+'ort.wasm.min.js'; sc.onload=res; sc.onerror=()=>rej(new Error('could not load onnxruntime-web'));
-          document.head.appendChild(sc);
-        });
-      }
-      ort.env.wasm.wasmPaths=ORT_BASE;
-      let lastErr;
-      for(const url of PLATE_MODEL_URLS){
-        try{
-          const r=await fetch(url);
-          if(!r.ok) throw new Error('HTTP '+r.status+' for '+url);
-          const buf=new Uint8Array(await r.arrayBuffer());
-          return await ort.InferenceSession.create(buf,{executionProviders:['wasm']});
-        }catch(e){ lastErr=e; }
-      }
-      throw lastErr;
+      return _loadOnnxModel(PLATE_MODEL_URLS);
     })().catch(err=>{ _plateSession=null; throw err; });
   }
   return _plateSession;
@@ -6012,35 +6035,76 @@ async function _detectPlates(session,work){
   return _nms(boxes);
 }
 
-function _detectFaces(face,work,persons){
-  const W=work.width,H=work.height;
-  const faces=[];
-  const run=(sx,sy,sw,sh)=>{
-    sx=Math.max(0,Math.round(sx)); sy=Math.max(0,Math.round(sy));
-    sw=Math.min(W-sx,Math.round(sw)); sh=Math.min(H-sy,Math.round(sh));
-    if(sw<8||sh<8) return [];
-    const S=256, sc=S/Math.max(sw,sh);
-    const c=document.createElement('canvas'); c.width=Math.round(sw*sc); c.height=Math.round(sh*sc);
-    c.getContext('2d').drawImage(work,sx,sy,sw,sh,0,0,c.width,c.height);
-    return face.detect(c).detections.map(d=>{
-      const b=d.boundingBox;
-      return {x:sx+b.originX/sc,y:sy+b.originY/sc,w:b.width/sc,h:b.height/sc,score:d.categories[0]?.score||0.5};
-    });
-  };
-  // Large faces in the whole frame
-  faces.push(...run(0,0,W,H));
-  // Head area of each detected person
-  for(const p of persons){
-    const side=Math.max(p.w,p.h*0.45);
-    const found=run(p.x+p.w/2-side/2,p.y-side*0.1,side,side);
-    if(found.length) faces.push(...found);
-    else if(p.h>=20&&p.score>=0.5){
-      // No face visible (turned away / too small) → blur the head region anyway
-      const hw=Math.min(p.w*0.6,p.h*0.22), hh=hw*1.25;
-      faces.push({x:p.x+p.w/2-hw/2,y:p.y,w:hw,h:hh,score:0.1});
+// Overlapping square tiles of side T (in work-canvas pixels)
+function _gridTiles(W,H,T,overlap){
+  const tw=Math.min(T,W), th=Math.min(T,H), step=Math.max(1,Math.round(T*(1-overlap)));
+  const xs=new Set([0,W-tw]), ys=new Set([0,H-th]);
+  for(let x=0;x<W-tw;x+=step) xs.add(x);
+  for(let y=0;y<H-th;y+=step) ys.add(y);
+  const tiles=[];
+  for(const x of xs) for(const y of ys) tiles.push({x,y,w:tw,h:th});
+  return tiles;
+}
+
+// Run YuNet on one region of the work canvas. The region is scaled to fit
+// FACE_INPUT² at the top-left, fed as BGR 0–255, and the per-stride outputs
+// (cls/obj/bbox for strides 8, 16, 32) are decoded to boxes. Decoding follows
+// OpenCV's FaceDetectorYN (opencv/modules/objdetect/src/face_detect.cpp,
+// Apache-2.0); re-implemented here in JavaScript, not copied.
+async function _yunetDetectIn(session,work,t){
+  const N=FACE_INPUT, r=Math.min(N/t.w,N/t.h);
+  const c=document.createElement('canvas'); c.width=N; c.height=N;
+  const cx=c.getContext('2d',{willReadFrequently:true});
+  cx.fillStyle='#000'; cx.fillRect(0,0,N,N);
+  cx.drawImage(work,t.x,t.y,t.w,t.h,0,0,Math.round(t.w*r),Math.round(t.h*r));
+  const d=cx.getImageData(0,0,N,N).data, A=N*N;
+  const input=new Float32Array(3*A);
+  for(let i=0;i<A;i++){ input[i]=d[i*4+2]; input[A+i]=d[i*4+1]; input[2*A+i]=d[i*4]; }
+  const feeds={}; feeds[session.inputNames[0]]=new ort.Tensor('float32',input,[1,3,N,N]);
+  const out=await session.run(feeds);
+  const boxes=[];
+  for(const st of [8,16,32]){
+    const cols=N/st, cls=out['cls_'+st].data, obj=out['obj_'+st].data, bb=out['bbox_'+st].data;
+    for(let i=0;i<cls.length;i++){
+      const score=Math.sqrt(Math.min(1,Math.max(0,cls[i]))*Math.min(1,Math.max(0,obj[i])));
+      if(score<FACE_MIN_SCORE) continue;
+      const row=Math.floor(i/cols), col=i%cols;
+      const fcx=(col+bb[i*4])*st, fcy=(row+bb[i*4+1])*st;
+      const fw=Math.exp(bb[i*4+2])*st, fh=Math.exp(bb[i*4+3])*st;
+      boxes.push({x:(fcx-fw/2)/r+t.x,y:(fcy-fh/2)/r+t.y,w:fw/r,h:fh/r,score});
     }
   }
+  return boxes;
+}
+
+async function _detectFaces(session,work){
+  const W=work.width,H=work.height;
+  // Whole frame (large faces) + native-resolution tiles (medium faces)
+  // + 2× upscaled tiles (small, distant faces)
+  const tiles=[{x:0,y:0,w:W,h:H}];
+  if(Math.max(W,H)>FACE_INPUT)   tiles.push(..._gridTiles(W,H,FACE_INPUT,0.25));
+  if(Math.max(W,H)>FACE_INPUT/2) tiles.push(..._gridTiles(W,H,FACE_INPUT/2,0.25));
+  let faces=[];
+  for(const t of tiles) faces.push(...await _yunetDetectIn(session,work,t));
+  // Faces are roughly upright ovals; drop odd shapes (hands, patterns)
+  faces=faces.filter(f=>{const a=f.w/f.h; return a>0.55&&a<1.25;});
   return _nms(faces);
+}
+
+// People with no detected face (turned away, too small) → blur their head area
+function _headsWithoutFaces(persons,faces){
+  const heads=[];
+  for(const p of persons){
+    if(p.h<20||p.score<0.5) continue;
+    const hasFace=faces.some(f=>{
+      const fx=f.x+f.w/2, fy=f.y+f.h/2;
+      return fx>=p.x&&fx<=p.x+p.w&&fy>=p.y-p.h*0.05&&fy<=p.y+p.h*0.5;
+    });
+    if(hasFace) continue;
+    const hw=Math.min(p.w*0.6,p.h*0.22), hh=hw*1.25;
+    heads.push({x:p.x+p.w/2-hw/2,y:p.y,w:hw,h:hh,score:0.1});
+  }
+  return heads;
 }
 
 async function detectPrivacyRegions(p){
@@ -6054,9 +6118,11 @@ async function detectPrivacyRegions(p){
   const pad=(b,f)=>({x:b.x-b.w*f,y:b.y-b.h*f,w:b.w*(1+2*f),h:b.h*(1+2*f)});
   const toImg=b=>({x:b.x/s,y:b.y/s,w:b.w/s,h:b.h/s});
   if(privacyFaces){
-    const {face,obj}=await _loadPrivacyDetectors();
-    for(const f of _detectFaces(face,work,_detectPersons(obj,work)))
-      regions.push({...toImg(pad(f,0.25)),shape:'ellipse',kind:'face'});
+    const [faceSession,personDet]=await Promise.all([_loadFaceDetector(),_loadPrivacyDetectors()]);
+    const faces=await _detectFaces(faceSession,work);
+    const heads=_headsWithoutFaces(_detectPersons(personDet,work),faces);
+    for(const f of _nms(faces.concat(heads)))
+      regions.push({...toImg(pad(f,0.35)),shape:'ellipse',kind:'face'});
   }
   if(privacyPlates){
     const session=await _loadPlateDetector();
